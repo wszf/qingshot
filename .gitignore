@@ -1,0 +1,14 @@
+.build/
+.swiftpm/
+.DS_Store
+.signing-identity
+.env
+.env.*
+*.p12
+*.pfx
+*.key
+*.mobileprovision
+*.app/
+*.zip
+work/
+outputs/

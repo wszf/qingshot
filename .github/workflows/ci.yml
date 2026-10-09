@@ -1,0 +1,15 @@
+name: macOS checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and verify
+        run: ./scripts/check.sh
+      - name: Verify icon packaging
+        run: ./scripts/build-icon.sh
