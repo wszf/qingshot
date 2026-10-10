@@ -15,7 +15,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - name: Resolve package version
         id: version
         shell: bash
@@ -36,7 +36,7 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.value }}
         run: ./scripts/release.sh "$VERSION" "$GITHUB_RUN_NUMBER"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: QingShot-macOS-arm64
           path: .build/dist/*
@@ -50,7 +50,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8.0.2
         with:
           name: QingShot-macOS-arm64
           path: dist
