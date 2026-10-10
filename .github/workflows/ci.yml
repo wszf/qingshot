@@ -1,15 +1,73 @@
-name: macOS checks
+name: macOS CI and Release
 on:
   push:
+    branches: ['**']
+    tags: ['v*']
   pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: macos-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
-  check:
+  build:
     runs-on: macos-15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Build and verify
-        run: ./scripts/check.sh
-      - name: Verify icon packaging
-        run: ./scripts/build-icon.sh
+      - name: Resolve package version
+        id: version
+        shell: bash
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          version=0.2.0
+          if [[ "$REF_TYPE" == tag ]]; then
+            if [[ ! "$REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo 'Release tags must use vMAJOR.MINOR.PATCH' >&2
+              exit 1
+            fi
+            version="${REF_NAME#v}"
+          fi
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+      - name: Build, test and package Apple Silicon app
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: ./scripts/release.sh "$VERSION" "$GITHUB_RUN_NUMBER"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: QingShot-macOS-arm64
+          path: .build/dist/*
+          if-no-files-found: error
+          retention-days: 14
+  release:
+    if: startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: QingShot-macOS-arm64
+          path: dist
+      - name: Publish preview release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          cat > notes.md <<'NOTES'
+          Apple Silicon (arm64) only. Requires macOS 15 or later.
+
+          This development preview is ad-hoc signed and is not Apple-notarized. macOS may block its first launch; review it in System Settings → Privacy & Security. Screen-recording permission may need to be granted again after updating. Building locally with a stable signing certificate remains recommended.
+
+          仅支持 Apple Silicon，要求 macOS 15 或更新版本。这是临时签名、未经 Apple 公证的开发预览版。首次启动可能被系统拦截，可在「系统设置 → 隐私与安全性」中查看；更新后可能需要重新授予录屏权限。
+          NOTES
+          gh release create "$RELEASE_TAG" dist/* --verify-tag --prerelease \
+            --title "QingShot $RELEASE_TAG (Apple Silicon Preview)" \
+            --notes-file notes.md --generate-notes

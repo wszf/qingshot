@@ -38,7 +38,31 @@ open ../QingShot.app
 
 You can instead save that certificate identifier in `.signing-identity`, an ignored local file. This file is not a private key. Never commit certificates, private keys or provisioning secrets. The script stages and verifies the bundle before replacing the previous build. It intentionally refuses ad-hoc signing: ad-hoc code hashes change after rebuilding and can invalidate macOS permission records.
 
-The build script creates a bundle for the current host architecture. This project does not yet publish a notarized distribution build. Building from source is currently the recommended installation method.
+The local build script creates a bundle for the current host architecture. Building from source with a stable signing certificate remains the recommended installation method.
+
+## CI and GitHub Releases
+
+GitHub Actions builds, runs all three self-tests, packages the app and verifies its signature on every branch push and pull request. You can also run the workflow manually. Download the ZIP and SHA-256 checksum from the `QingShot-macOS-arm64` workflow artifact (retained for 14 days).
+
+Push a tag such as `v0.2.0` to automatically publish a GitHub prerelease with the ZIP and checksum. Tags must use `vMAJOR.MINOR.PATCH`; the tag supplies the app version and the Actions run number supplies its build number. Only Apple Silicon (arm64), macOS 15+, is distributed. No Intel build is produced. Publishing uses the built-in GitHub token; no repository secrets are required.
+
+These preview packages are **ad-hoc signed, not Apple-notarized**. macOS may block the first launch; review it in System Settings → Privacy & Security. Updating may require granting screen-recording permission again. The local `build.sh` signing policy is unchanged.
+
+To reproduce a preview package on Apple Silicon:
+
+```sh
+./scripts/release.sh 0.2.0 2
+# ZIP and checksum: .build/dist/
+```
+
+To publish after committing and pushing your changes:
+
+```sh
+git tag -a v0.2.0 -m "QingShot 0.2.0"
+git push origin v0.2.0
+```
+
+Use a new version tag for each release. Already-published releases are not overwritten on workflow reruns.
 
 ## Use
 
