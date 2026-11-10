@@ -39,7 +39,7 @@ import Combine
     func applicationShouldHandleReopen(_ sender:NSApplication,hasVisibleWindows:Bool) -> Bool {model.showWindow();return true}
     func applicationShouldTerminate(_ sender:NSApplication) -> NSApplication.TerminateReply {
         if model.recording || model.recordStarting {model.alert(L("请先停止录屏"),L("录屏文件完成保存后再退出轻截图。"));return .terminateCancel}
-        model.captureProcess?.terminate();return .terminateNow
+        model.captureSession?.cancel();return .terminateNow
     }
     func item(_ title:String,_ action:Selector,_ key:String = "") -> NSMenuItem {let i = NSMenuItem(title:title,action:action,keyEquivalent:key);i.target = self;return i}
     func setupMenu() {

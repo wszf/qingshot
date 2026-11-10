@@ -39,6 +39,10 @@
 "区域截图" = "Capture Area";
 "截图已取消；若未出现选区，请检查屏幕录制权限" = "Capture cancelled. If no selection appeared, check Screen Recording permission.";
 "截图失败，请检查屏幕录制权限" = "Capture failed. Check Screen Recording permission.";
+"正在冻结屏幕…" = "Freezing the screen…";
+"拖动选择区域 · Esc 取消" = "Drag to select an area · Esc to cancel";
+"点击选择窗口 · Esc 取消" = "Click to capture a window · Esc to cancel";
+"已取消截图" = "Capture cancelled";
 "无法截图" = "Could not capture";
 "置顶参考 · 关闭窗口即可取消" = "Pinned reference · Close to unpin";
 "图片已置顶，可拖动或缩放" = "Image pinned. Drag or resize the window.";

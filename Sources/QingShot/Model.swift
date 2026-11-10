@@ -29,7 +29,7 @@ struct EditState { let image: NSImage; let marks: [Mark] }
     var quickPanel: NSPanel?
     var pins: [NSWindow] = []
     var didRequestScreenAccess = false
-    var captureProcess: Process?
+    var captureSession: FrozenCaptureSession?
     var recorder: ScreenRecorder?
     var historyURL: URL {
         FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("QingShot/History",isDirectory:true)
@@ -80,26 +80,40 @@ struct EditState { let image: NSImage; let marks: [Mark] }
         guard !busy, !recording, !recordStarting else {return}
         guard ensureScreenCaptureAccess() else {return}
         busy = true; quickPanel?.orderOut(nil); let wasVisible = window?.isVisible ?? false
+        let mouse = NSEvent.mouseLocation
         window?.orderOut(nil); pins.forEach {$0.orderOut(nil)}; NSApp.hide(nil)
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("qingshot-\(UUID().uuidString).png")
-        DispatchQueue.main.asyncAfter(deadline:.now()+0.35) { [self] in
-            let process = Process(); process.executableURL = URL(fileURLWithPath:"/usr/sbin/screencapture")
-            process.arguments = ["-x","-t","png"] + (mode == "full" ? ["-m"] : mode == "window" ? ["-i","-w"] : ["-i"]) + [url.path]
-            let err = Pipe(); process.standardError = err
-            process.terminationHandler = { [weak self] p in
-                Task { @MainActor in
-                    guard let self else {return}; self.busy = false; self.captureProcess = nil
-                    defer {try? FileManager.default.removeItem(at:url)}
-                    self.pins.forEach {$0.orderFrontRegardless()}
-                    if let img = NSImage(contentsOf:url) {
-                        self.load(img,name:mode == "window" ? L("窗口截图") : mode == "full" ? L("全屏截图") : L("区域截图")); self.showQuickPanel()
-                    } else {
-                        self.status = p.terminationStatus == 0 || p.terminationStatus == 1 ? L("截图已取消；若未出现选区，请检查屏幕录制权限") : L("截图失败，请检查屏幕录制权限")
-                        if wasVisible {self.showWindow()}
-                    }
+        status = L("正在冻结屏幕…")
+        Task { [weak self] in
+            // Let the hidden panels and the closing menu leave the screen before freezing.
+            try? await Task.sleep(nanoseconds:250_000_000)
+            guard let self else {return}
+            do {
+                let snapshot = try await FrozenCapture.take()
+                NSApp.unhide(nil); NSApp.activate(ignoringOtherApps:true)
+                if mode == "full" {
+                    self.presentCapture((snapshot.frames.first {$0.frame.contains(mouse)} ?? snapshot.frames.first)?.image, mode:mode, wasVisible:wasVisible)
+                    return
                 }
+                let session = FrozenCaptureSession(snapshot:snapshot, mode:mode) { [weak self] image in
+                    self?.presentCapture(image, mode:mode, wasVisible:wasVisible)
+                }
+                self.captureSession = session
+                self.status = mode == "window" ? L("点击选择窗口 · Esc 取消") : L("拖动选择区域 · Esc 取消")
+                session.start()
+            } catch {
+                NSApp.unhide(nil)
+                self.presentCapture(nil, mode:mode, wasVisible:wasVisible, failed:true)
             }
-            do { try process.run(); captureProcess = process } catch {busy = false; showWindow(); alert(L("无法截图"),error.localizedDescription)}
+        }
+    }
+    func presentCapture(_ image:NSImage?, mode:String, wasVisible:Bool, failed:Bool = false) {
+        busy = false; captureSession = nil
+        pins.forEach {$0.orderFrontRegardless()}
+        if let image {
+            load(image,name:mode == "window" ? L("窗口截图") : mode == "full" ? L("全屏截图") : L("区域截图")); showQuickPanel()
+        } else {
+            status = failed ? L("截图失败，请检查屏幕录制权限") : L("已取消截图")
+            if wasVisible {showWindow()}
         }
     }
     func showQuickPanel() {
@@ -108,8 +122,9 @@ struct EditState { let image: NSImage; let marks: [Mark] }
         panel.isReleasedWhenClosed = false; panel.level = .floating; panel.isOpaque = false; panel.backgroundColor = .clear; panel.hasShadow = true
         panel.collectionBehavior = [.canJoinAllSpaces,.fullScreenAuxiliary]
         panel.contentView = NSHostingView(rootView:QuickView(model:self))
+        // Center on the display the capture happened on, so it is easy to reach.
         let frame = (NSScreen.screens.first {$0.frame.contains(NSEvent.mouseLocation)} ?? NSScreen.main)?.visibleFrame ?? .zero
-        panel.setFrameOrigin(CGPoint(x:frame.maxX-320,y:frame.minY+22)); panel.orderFrontRegardless(); quickPanel = panel
+        panel.setFrameOrigin(CGPoint(x:frame.midX-panel.frame.width/2,y:frame.midY-panel.frame.height/2)); panel.orderFrontRegardless(); quickPanel = panel
     }
     func pin() {
         guard let img = output() else {return}

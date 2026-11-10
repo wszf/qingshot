@@ -18,6 +18,21 @@ enum SelfTest {
         check(cc.redComponent < 0.15,"Crop content matches selection")
         let backdrop = Renderer.render(demo,marks:[],backdrop:.mint,padding:64)
         check(backdrop.pixelSize == CGSize(width:1328,height:888),"Backdrop padding")
+        let demoCG = demo.cgImage(forProposedRect:nil,context:nil,hints:nil)!
+        let frozenLeft = FrozenFrame(frame:NSRect(x:0,y:0,width:600,height:380),image:demo,cgImage:demoCG)
+        let frozenRight = FrozenFrame(frame:NSRect(x:600,y:0,width:600,height:380),image:demo,cgImage:demoCG)
+        let frozenCrop = FrozenCapture.crop([frozenLeft],rect:NSRect(x:50,y:50,width:100,height:60))
+        check(frozenCrop?.pixelSize == CGSize(width:200,height:120),"Frozen crop keeps native Retina pixels")
+        let frozenAcross = FrozenCapture.crop([frozenLeft,frozenRight],rect:NSRect(x:550,y:100,width:100,height:100))
+        check(frozenAcross?.pixelSize == CGSize(width:200,height:200),"Frozen crop composites across displays")
+        let marker = Renderer.bitmap(size:CGSize(width:100,height:100)) {
+            NSColor.red.setFill(); NSBezierPath(rect:CGRect(x:0,y:0,width:100,height:50)).fill()
+            NSColor.blue.setFill(); NSBezierPath(rect:CGRect(x:0,y:50,width:100,height:50)).fill()
+        }
+        let markerFrame = FrozenFrame(frame:NSRect(x:0,y:0,width:50,height:50),image:marker,cgImage:marker.cgImage(forProposedRect:nil,context:nil,hints:nil)!)
+        let bottomHalf = FrozenCapture.crop([markerFrame],rect:NSRect(x:0,y:0,width:50,height:25))!
+        let bottomColor = NSBitmapImageRep(data:bottomHalf.png!)!.colorAt(x:10,y:10)!.usingColorSpace(.deviceRGB)!
+        check(bottomColor.blueComponent > 0.5 && bottomColor.redComponent < 0.5,"Frozen crop maps NSScreen coordinates to image pixels")
         let joined = Renderer.stitch([demo,demo],overlap:60)!
         check(joined.pixelSize == CGSize(width:1200,height:1460),"Vertical stitch and overlap")
         let request = VNRecognizeTextRequest();request.recognitionLevel = .accurate;request.recognitionLanguages = ["en-US","zh-Hans"]
