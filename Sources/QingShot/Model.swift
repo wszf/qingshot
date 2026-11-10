@@ -167,16 +167,30 @@ struct InlineBackup { let image:NSImage?; let marks:[Mark]; let name:String; let
         panel.title = L("置顶参考 · 关闭窗口即可取消"); panel.isReleasedWhenClosed = false; panel.level = .floating; panel.collectionBehavior = [.canJoinAllSpaces,.fullScreenAuxiliary]
         let view = NSImageView(); view.image = img; view.imageScaling = .scaleProportionallyUpOrDown; panel.contentView = view; panel.center(); panel.orderFrontRegardless(); pins.removeAll {!$0.isVisible}; pins.append(panel); status = L("图片已置顶，可拖动或缩放")
     }
-    func recognize() {
-        guard let img = image, !busy, let cg = Renderer.render(img,marks:marks).cgImage(forProposedRect:nil,context:nil,hints:nil) else {return}
+    func recognize(showSheet:Bool = true, completion:((String,Error?) -> Void)? = nil) {
+        guard let img = image, !busy, let cg = Renderer.render(img,marks:marks).cgImage(forProposedRect:nil,context:nil,hints:nil) else {
+            completion?("",NSError(domain:"QingShot",code:1,userInfo:[NSLocalizedDescriptionKey:L("文字识别失败")]))
+            return
+        }
         busy = true; status = L("正在本机识别文字…")
         DispatchQueue.global(qos:.userInitiated).async {
             let req = VNRecognizeTextRequest(); req.recognitionLevel = .accurate; req.recognitionLanguages = ["zh-Hans","en-US"]; req.usesLanguageCorrection = true
             do {
                 try VNImageRequestHandler(cgImage:cg,options:[:]).perform([req])
                 let text = (req.results ?? []).compactMap {$0.topCandidates(1).first?.string}.joined(separator:"\n")
-                Task { @MainActor in self.busy = false; self.ocrText = text; self.showOCR = true; self.status = text.isEmpty ? L("没有识别到文字") : L("文字识别完成，可编辑后复制") }
-            } catch { Task { @MainActor in self.busy = false; self.alert(L("文字识别失败"),error.localizedDescription) } }
+                Task { @MainActor in
+                    self.busy = false; self.ocrText = text
+                    if showSheet {self.showOCR = true}
+                    self.status = text.isEmpty ? L("没有识别到文字") : L("文字识别完成，可编辑后复制")
+                    completion?(text,nil)
+                }
+            } catch {
+                Task { @MainActor in
+                    self.busy = false; self.status = L("文字识别失败")
+                    if showSheet {self.alert(L("文字识别失败"),error.localizedDescription)}
+                    completion?("",error)
+                }
+            }
         }
     }
     func stitch() {

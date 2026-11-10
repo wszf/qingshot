@@ -85,6 +85,9 @@
 "关闭" = "Close";
 "复制文字" = "Copy Text";
 "已复制识别文字" = "Recognized text copied";
+"复制全部" = "Copy All";
+"已自动复制识别文字" = "Recognized text copied automatically";
+"返回" = "Back";
 "轻截图" = "QingShot";
 "新建截图" = "New Capture";
 "导入图片" = "Import Image";

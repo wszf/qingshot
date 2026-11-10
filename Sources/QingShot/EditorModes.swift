@@ -13,6 +13,11 @@ enum PostCaptureMode:String, CaseIterable, Identifiable {
     static func save(_ mode:PostCaptureMode, in defaults:UserDefaults = .standard) {defaults.set(mode.rawValue,forKey:defaultsKey)}
 }
 
+enum PanelOCRState:Equatable {
+    case idle, running, result, empty
+    case error(String)
+}
+
 enum CaptureKeyAction:Equatable {case cancel, copy, save, undo, redo, tool(Int)}
 enum CaptureKeyRouter {
     static func isTextInput(_ window:NSWindow?) -> Bool {
@@ -95,10 +100,13 @@ final class PostCapturePanel:NSPanel {
     override func cancelOperation(_ sender:Any?) {onCancel?()}
 }
 
-@MainActor final class PostCaptureController {
+@MainActor final class PostCaptureController:ObservableObject {
     private unowned let model:ShotModel
     private var panel:PostCapturePanel?
     private var monitor:Any?
+    @Published private(set) var ocrState:PanelOCRState = .idle
+    @Published private(set) var ocrNotice:String?
+    private var ocrRequest = 0
 
     init(model:ShotModel) {self.model = model}
 
@@ -108,10 +116,10 @@ final class PostCapturePanel:NSPanel {
         let size = PostCaptureLayout.panelSize(image:image.pixelSize,pixelScale:screen.backingScaleFactor,screen:screen.visibleFrame)
         let panel = PostCapturePanel(contentRect:NSRect(origin:.zero,size:size),styleMask:[.borderless],backing:.buffered,defer:false)
         panel.isReleasedWhenClosed = false;panel.isOpaque = false;panel.backgroundColor = .clear;panel.hasShadow = true
-        panel.onCancel = { [weak self] in self?.close() }
+        panel.onCancel = { [weak self] in self?.handleEscape() }
         panel.level = .floating;panel.hidesOnDeactivate = false;panel.isFloatingPanel = true
         panel.collectionBehavior = [.canJoinAllSpaces,.fullScreenAuxiliary]
-        let host = NSHostingView(rootView:PostCaptureEditorView(model:model, close:{ [weak self] in self?.close() }, copyAndClose:{ [weak self] in self?.copyAndClose() }, openMain:{ [weak self] in self?.openMain() }, openOCR:{ [weak self] in self?.openOCR() }))
+        let host = NSHostingView(rootView:PostCaptureEditorView(model:model, controller:self, close:{ [weak self] in self?.close() }, copyAndClose:{ [weak self] in self?.copyAndClose() }, openMain:{ [weak self] in self?.openMain() }))
         host.appearance = NSAppearance(named:.aqua)
         panel.appearance = NSAppearance(named:.aqua)
         panel.contentView = host
@@ -120,10 +128,12 @@ final class PostCapturePanel:NSPanel {
         model.quickPanel = panel
         NSApp.unhide(nil);NSApp.activate(ignoringOtherApps:true);panel.makeKeyAndOrderFront(nil)
         monitor = NSEvent.addLocalMonitorForEvents(matching:.keyDown) { [weak self] event in
-            guard let self,let panel = self.panel,panel.isVisible,event.window === panel,CaptureKeyRouter.isTextInput(panel) == false else {return event}
-            guard let action = CaptureKeyRouter.action(event) else {return event}
+            guard let self,let panel = self.panel,panel.isVisible,event.window === panel else {return event}
+            if event.keyCode == 53 {self.handleEscape();return nil}
+            if self.ocrState != .idle {return event}
+            guard CaptureKeyRouter.isTextInput(panel) == false,let action = CaptureKeyRouter.action(event) else {return event}
             switch action {
-            case .cancel: self.close()
+            case .cancel: self.handleEscape()
             case .copy: self.copyAndClose()
             case .save: self.model.save()
             case .undo: self.model.undo()
@@ -134,29 +144,73 @@ final class PostCapturePanel:NSPanel {
         }
     }
 
+    func handleEscape() {
+        if ocrState != .idle {dismissOCR()} else {close()}
+    }
+
+    func extractText() {
+        guard model.image != nil, !model.busy, ocrState != .running else {return}
+        ocrRequest += 1
+        let request = ocrRequest
+        ocrState = .running;ocrNotice = nil
+        model.recognize(showSheet:false) { [weak self] text,error in
+            guard let self,self.ocrRequest == request else {return}
+            if let error {
+                self.ocrState = .error(error.localizedDescription)
+                return
+            }
+            if text.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty {
+                self.ocrState = .empty
+                return
+            }
+            self.ocrState = .result
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text,forType:.string)
+            self.ocrNotice = L("已自动复制识别文字")
+            self.model.status = L("已复制识别文字")
+        }
+    }
+
+    func dismissOCR() {
+        ocrRequest += 1
+        ocrState = .idle;ocrNotice = nil
+    }
+
+    func copyOCR() {
+        guard !model.ocrText.isEmpty else {return}
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(model.ocrText,forType:.string)
+        ocrNotice = L("已复制识别文字")
+        model.status = L("已复制识别文字")
+    }
+
     func close() {
+        ocrRequest += 1;ocrState = .idle;ocrNotice = nil
         if let monitor {NSEvent.removeMonitor(monitor);self.monitor = nil}
         panel?.orderOut(nil);panel = nil
         if model.quickPanel?.isVisible == false {model.quickPanel = nil}
     }
     func copyAndClose() {model.copy();model.status = L("已复制图片，可粘贴到其他应用");close()}
     func openMain() {close();model.showWindow()}
-    func openOCR() {close();model.showWindow();model.recognize()}
 }
 
 struct PostCaptureEditorView: View {
     @ObservedObject var languageStore = LanguageStore.shared
     @ObservedObject var model:ShotModel
+    @ObservedObject var controller:PostCaptureController
     let close:()->Void
     let copyAndClose:()->Void
     let openMain:()->Void
-    let openOCR:()->Void
+    @FocusState private var ocrFocused:Bool
 
     var body: some View {
         VStack(spacing:0) {
             topBar.frame(height:54)
             Divider()
-            CanvasBridge(model:model, inset:0, maxScale:1).padding(16).frame(maxWidth:.infinity,maxHeight:.infinity)
+            ZStack {
+                CanvasBridge(model:model, inset:0, maxScale:1).padding(16)
+                if controller.ocrState != .idle {ocrOverlay.padding(16)}
+            }.frame(maxWidth:.infinity,maxHeight:.infinity)
             Divider()
             bottomBar.frame(height:58)
         }
@@ -164,6 +218,9 @@ struct PostCaptureEditorView: View {
         .clipShape(RoundedRectangle(cornerRadius:14))
         .overlay(RoundedRectangle(cornerRadius:14).stroke(.black.opacity(0.14)))
         .tint(accent).preferredColorScheme(.light)
+        .onChange(of:controller.ocrState) {_,state in
+            if case .result = state {ocrFocused = true} else {ocrFocused = false}
+        }
     }
 
     var topBar: some View {
@@ -211,6 +268,51 @@ struct PostCaptureEditorView: View {
         .help(L("线宽") + " · " + (model.lineWidth >= 9 ? L("粗") : model.lineWidth >= 5 ? L("中") : L("细")))
     }
 
+    var ocrOverlay: some View {
+        VStack(alignment:.leading,spacing:10) {
+            HStack(spacing:10) {
+                Label(L("提取文字"),systemImage:"text.viewfinder").font(.system(size:14,weight:.semibold))
+                Spacer()
+                if case .result = controller.ocrState {
+                    Button(L("复制全部")) {controller.copyOCR()}.buttonStyle(.borderedProminent)
+                }
+                Button {controller.dismissOCR()} label: {Image(systemName:"xmark").frame(width:24,height:24)}.buttonStyle(.plain).help(L("返回"))
+            }
+            switch controller.ocrState {
+            case .running:
+                VStack(spacing:10) {
+                    ProgressView().controlSize(.large)
+                    Text(L("正在本机识别文字…")).font(.system(size:12)).foregroundStyle(.secondary)
+                }.frame(maxWidth:.infinity,maxHeight:.infinity)
+            case .result:
+                TextEditor(text:$model.ocrText).font(.system(size:14)).padding(8)
+                    .background(Color(nsColor:.textBackgroundColor)).clipShape(RoundedRectangle(cornerRadius:8))
+                    .focused($ocrFocused).onAppear {ocrFocused = true}
+                if let notice = controller.ocrNotice {
+                    Text(notice).font(.system(size:11)).foregroundStyle(accent)
+                }
+            case .empty:
+                VStack(spacing:10) {
+                    Image(systemName:"text.magnifyingglass").font(.system(size:24)).foregroundStyle(.secondary)
+                    Text(L("没有识别到文字")).font(.system(size:13)).foregroundStyle(.secondary)
+                }.frame(maxWidth:.infinity,maxHeight:.infinity)
+            case .error(let message):
+                VStack(spacing:8) {
+                    Image(systemName:"exclamationmark.triangle").font(.system(size:24)).foregroundStyle(.orange)
+                    Text(L("文字识别失败")).font(.system(size:13,weight:.medium))
+                    Text(message).font(.system(size:11)).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                }.frame(maxWidth:.infinity,maxHeight:.infinity)
+            case .idle:
+                EmptyView()
+            }
+        }
+        .padding(16)
+        .background(Color(nsColor:NSColor(hex:0xFDFDFC)).opacity(0.98))
+        .clipShape(RoundedRectangle(cornerRadius:12))
+        .overlay(RoundedRectangle(cornerRadius:12).stroke(.black.opacity(0.16)))
+        .shadow(color:.black.opacity(0.18),radius:14,y:6)
+    }
+
     var bottomBar: some View {
         HStack(spacing:8) {
             backgrounds.fixedSize()
@@ -218,7 +320,7 @@ struct PostCaptureEditorView: View {
             Spacer(minLength:6)
             HStack(spacing:8) {
                 ImageDragChip(model:model)
-                Button(L("提取文字")) {openOCR()}.fixedSize()
+                Button(L("提取文字")) {controller.extractText()}.fixedSize()
                 Button(L("置顶")) {model.pin()}.fixedSize()
                 Button(L("保存")) {model.save()}.fixedSize()
                 Button(L("主窗口")) {openMain()}.fixedSize()
