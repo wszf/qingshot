@@ -88,12 +88,11 @@ struct ContentView: View {
             ForEach(MarkTool.allCases) {t in
                 Button {model.tool = t} label: {VStack(spacing:4) {Image(systemName:t.icon).font(.system(size:15,weight:.medium)).frame(height:19); Text(t.label).font(.system(size:9))}.frame(width:Localization.languageCode() == "en" ? 49 : 42,height:46).foregroundStyle(model.tool == t ? accent : Color.secondary).background(model.tool == t ? accent.opacity(0.12) : .clear).clipShape(RoundedRectangle(cornerRadius:8))}.buttonStyle(.plain).help(t.label)
             }
-            Divider().frame(height:28).padding(.horizontal,8)
-            HStack(spacing:0) {
-                ColorPicker(L("颜色"),selection:$model.color,supportsOpacity:false).labelsHidden().frame(width:30)
-                Divider().frame(height:22).padding(.horizontal,10)
-                Picker(L("线宽"),selection:$model.lineWidth) {Text(L("细")).tag(3.0);Text(L("中")).tag(5.0);Text(L("粗")).tag(9.0)}.labelsHidden().pickerStyle(.menu).frame(width:Localization.languageCode() == "en" ? 72 : 58)
-            }.padding(.horizontal,6).padding(.vertical,2).background(Theme.chip).clipShape(Capsule()).fixedSize()
+            Divider().frame(height:28).padding(.horizontal,10)
+            AnnotationColorControls(model:model,height:46)
+            Divider().frame(height:28).padding(.horizontal,10)
+            AnnotationWidthControls(model:model,buttonWidth:30,buttonHeight:46)
+            Divider().frame(height:28).padding(.horizontal,10)
             Spacer(minLength:0)
             Button {model.undo()} label: {Image(systemName:"arrow.uturn.backward")}.disabled(model.undoStack.isEmpty).help(L("撤销 ⌘Z"))
             Button {model.redo()} label: {Image(systemName:"arrow.uturn.forward")}.disabled(model.redoStack.isEmpty).help(L("重做 ⇧⌘Z"))

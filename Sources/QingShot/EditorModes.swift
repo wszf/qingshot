@@ -234,16 +234,11 @@ struct PostCaptureEditorView: View {
                             }.buttonStyle(.plain).help(tool.label)
                         }
                     }.fixedSize()
-                    Divider().frame(height:24).padding(.horizontal,12)
-                    HStack(spacing:0) {
-                        ColorPicker(L("颜色"),selection:$model.color,supportsOpacity:false).labelsHidden().frame(width:30,height:30).fixedSize()
-                        Divider().frame(height:20).padding(.horizontal,12)
-                        lineWidthMenu
-                    }
-                    .padding(.horizontal,6).padding(.vertical,2)
-                    .background(Theme.chip).clipShape(Capsule())
-                    .fixedSize()
-                    Divider().frame(height:24).padding(.horizontal,12)
+                    Divider().frame(height:24).padding(.horizontal,10)
+                    AnnotationColorControls(model:model,height:30)
+                    Divider().frame(height:24).padding(.horizontal,10)
+                    AnnotationWidthControls(model:model)
+                    Divider().frame(height:24).padding(.horizontal,10)
                     HStack(spacing:4) {
                         Button {model.undo()} label: {Image(systemName:"arrow.uturn.backward")}.buttonStyle(.plain).disabled(model.undoStack.isEmpty).help(L("撤销 ⌘Z"))
                         Button {model.redo()} label: {Image(systemName:"arrow.uturn.forward")}.buttonStyle(.plain).disabled(model.redoStack.isEmpty).help(L("重做 ⇧⌘Z"))
@@ -254,18 +249,6 @@ struct PostCaptureEditorView: View {
         }.padding(.horizontal,14)
     }
 
-    var lineWidthMenu: some View {
-        Menu {
-            Button {model.lineWidth = 3} label: {Text(L("细"))}
-            Button {model.lineWidth = 5} label: {Text(L("中"))}
-            Button {model.lineWidth = 9} label: {Text(L("粗"))}
-        } label: {
-            Image(systemName:"line.3.horizontal").font(.system(size:14,weight:.medium)).foregroundStyle(.secondary)
-                .frame(width:30,height:30)
-        }
-        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-        .help(L("线宽") + " · " + (model.lineWidth >= 9 ? L("粗") : model.lineWidth >= 5 ? L("中") : L("细")))
-    }
 
     var ocrOverlay: some View {
         VStack(alignment:.leading,spacing:10) {
@@ -402,17 +385,6 @@ struct InlineToolbarView:View {
         }.fixedSize()
     }
 
-    var colorWidthGroup:some View {
-        HStack(spacing:0) {
-            ColorPicker(L("颜色"),selection:$model.color,supportsOpacity:false).labelsHidden().frame(width:26,height:28).fixedSize()
-            Divider().frame(height:20).padding(.horizontal,12)
-            Picker(L("线宽"),selection:$model.lineWidth) {Text(L("细")).tag(3.0);Text(L("中")).tag(5.0);Text(L("粗")).tag(9.0)}.labelsHidden().pickerStyle(.segmented).frame(width:112).fixedSize()
-        }
-        .padding(.horizontal,6).padding(.vertical,2)
-        .background(Theme.chip).clipShape(Capsule())
-        .fixedSize()
-    }
-
     var undoGroup:some View {
         HStack(spacing:3) {
             Button {model.undo()} label: {Image(systemName:"arrow.uturn.backward")}.buttonStyle(.plain).disabled(model.undoStack.isEmpty).help(L("撤销 ⌘Z"))
@@ -440,7 +412,9 @@ struct InlineToolbarView:View {
         HStack(spacing:3) {
             toolGroup
             Divider().frame(height:22).padding(.horizontal,10)
-            colorWidthGroup
+            AnnotationColorControls(model:model,height:28)
+            Divider().frame(height:22).padding(.horizontal,10)
+            AnnotationWidthControls(model:model,buttonWidth:27,buttonHeight:28)
             Divider().frame(height:22).padding(.horizontal,10)
             undoGroup
             Divider().frame(height:22).padding(.horizontal,10)
@@ -456,10 +430,12 @@ struct InlineToolbarView:View {
             HStack(spacing:3) {
                 toolGroup
                 Divider().frame(height:22).padding(.horizontal,10)
-                colorWidthGroup
+                AnnotationColorControls(model:model,height:28)
                 Spacer(minLength:0)
             }
             HStack(spacing:3) {
+                AnnotationWidthControls(model:model,buttonWidth:27,buttonHeight:28)
+                Divider().frame(height:22).padding(.horizontal,10)
                 undoGroup
                 Divider().frame(height:22).padding(.horizontal,10)
                 actionGroup
