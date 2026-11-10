@@ -13,7 +13,7 @@ enum PostCaptureMode:String, CaseIterable, Identifiable {
     static func save(_ mode:PostCaptureMode, in defaults:UserDefaults = .standard) {defaults.set(mode.rawValue,forKey:defaultsKey)}
 }
 
-enum CaptureKeyAction {case cancel, copy, save, undo, redo, tool(Int)}
+enum CaptureKeyAction:Equatable {case cancel, copy, save, undo, redo, tool(Int)}
 enum CaptureKeyRouter {
     static func isTextInput(_ window:NSWindow?) -> Bool {
         guard let responder = window?.firstResponder else {return false}
@@ -86,8 +86,13 @@ enum InlineToolbarLayout {
 }
 
 final class PostCapturePanel:NSPanel {
+    var onCancel:(()->Void)?
     override var canBecomeKey:Bool {true}
     override var canBecomeMain:Bool {true}
+    override func keyDown(with event:NSEvent) {
+        if event.keyCode == 53 {onCancel?()} else {super.keyDown(with:event)}
+    }
+    override func cancelOperation(_ sender:Any?) {onCancel?()}
 }
 
 @MainActor final class PostCaptureController {
@@ -103,6 +108,7 @@ final class PostCapturePanel:NSPanel {
         let size = PostCaptureLayout.panelSize(image:image.pixelSize,pixelScale:screen.backingScaleFactor,screen:screen.visibleFrame)
         let panel = PostCapturePanel(contentRect:NSRect(origin:.zero,size:size),styleMask:[.borderless],backing:.buffered,defer:false)
         panel.isReleasedWhenClosed = false;panel.isOpaque = false;panel.backgroundColor = .clear;panel.hasShadow = true
+        panel.onCancel = { [weak self] in self?.close() }
         panel.level = .floating;panel.hidesOnDeactivate = false;panel.isFloatingPanel = true
         panel.collectionBehavior = [.canJoinAllSpaces,.fullScreenAuxiliary]
         let host = NSHostingView(rootView:PostCaptureEditorView(model:model, close:{ [weak self] in self?.close() }, copyAndClose:{ [weak self] in self?.copyAndClose() }, openMain:{ [weak self] in self?.openMain() }, openOCR:{ [weak self] in self?.openOCR() }))
@@ -161,35 +167,63 @@ struct PostCaptureEditorView: View {
     }
 
     var topBar: some View {
-        HStack(spacing:3) {
-            ForEach(MarkTool.allCases) {tool in
-                Button {model.tool = tool} label: {
-                    Image(systemName:tool.icon).font(.system(size:14,weight:.medium)).frame(width:30,height:30)
-                        .foregroundStyle(model.tool == tool ? accent : Color.secondary)
-                        .background(model.tool == tool ? accent.opacity(0.13) : .clear).clipShape(RoundedRectangle(cornerRadius:7))
-                }.buttonStyle(.plain).help(tool.label)
+        HStack(spacing:8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing:0) {
+                    HStack(spacing:2) {
+                        ForEach(MarkTool.allCases) {tool in
+                            Button {model.tool = tool} label: {
+                                Image(systemName:tool.icon).font(.system(size:14,weight:.medium)).frame(width:30,height:30)
+                                    .foregroundStyle(model.tool == tool ? accent : Color.secondary)
+                                    .background(model.tool == tool ? accent.opacity(0.13) : .clear).clipShape(RoundedRectangle(cornerRadius:7))
+                            }.buttonStyle(.plain).help(tool.label)
+                        }
+                    }.fixedSize()
+                    Divider().frame(height:24).padding(.horizontal,10)
+                    HStack(spacing:8) {
+                        ColorPicker(L("颜色"),selection:$model.color,supportsOpacity:false).labelsHidden().frame(width:30,height:30).fixedSize()
+                        lineWidthMenu
+                    }
+                    .padding(.horizontal,7).padding(.vertical,2)
+                    .background(.black.opacity(0.035)).clipShape(Capsule())
+                    .fixedSize()
+                    Divider().frame(height:24).padding(.horizontal,10)
+                    HStack(spacing:4) {
+                        Button {model.undo()} label: {Image(systemName:"arrow.uturn.backward")}.buttonStyle(.plain).disabled(model.undoStack.isEmpty).help(L("撤销 ⌘Z"))
+                        Button {model.redo()} label: {Image(systemName:"arrow.uturn.forward")}.buttonStyle(.plain).disabled(model.redoStack.isEmpty).help(L("重做 ⇧⌘Z"))
+                    }.fixedSize()
+                }.fixedSize()
             }
-            Divider().frame(height:24).padding(.horizontal,6)
-            ColorPicker(L("颜色"),selection:$model.color,supportsOpacity:false).labelsHidden().frame(width:30)
-            Picker(L("线宽"),selection:$model.lineWidth) {Text(L("细")).tag(3.0);Text(L("中")).tag(5.0);Text(L("粗")).tag(9.0)}.labelsHidden().pickerStyle(.menu).frame(width:64)
-            Divider().frame(height:24).padding(.horizontal,6)
-            Button {model.undo()} label: {Image(systemName:"arrow.uturn.backward")}.buttonStyle(.plain).disabled(model.undoStack.isEmpty).help(L("撤销 ⌘Z"))
-            Button {model.redo()} label: {Image(systemName:"arrow.uturn.forward")}.buttonStyle(.plain).disabled(model.redoStack.isEmpty).help(L("重做 ⇧⌘Z"))
-            Spacer(minLength:8)
             Button(action:close) {Image(systemName:"xmark").font(.system(size:13,weight:.semibold)).foregroundStyle(.secondary).frame(width:28,height:28)}.buttonStyle(.plain).help(L("关闭"))
         }.padding(.horizontal,14)
     }
 
+    var lineWidthMenu: some View {
+        Menu {
+            Button {model.lineWidth = 3} label: {Text(L("细"))}
+            Button {model.lineWidth = 5} label: {Text(L("中"))}
+            Button {model.lineWidth = 9} label: {Text(L("粗"))}
+        } label: {
+            Image(systemName:"line.3.horizontal").font(.system(size:14,weight:.medium)).foregroundStyle(.secondary)
+                .frame(width:30,height:30).background(.black.opacity(0.04)).clipShape(RoundedRectangle(cornerRadius:7))
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .help(L("线宽") + " · " + (model.lineWidth >= 9 ? L("粗") : model.lineWidth >= 5 ? L("中") : L("细")))
+    }
+
     var bottomBar: some View {
-        HStack(spacing:9) {
-            backgrounds
+        HStack(spacing:8) {
+            backgrounds.fixedSize()
+            Divider().frame(height:20)
             Spacer(minLength:6)
-            ImageDragChip(model:model)
-            Button(L("提取文字")) {openOCR()}
-            Button(L("置顶")) {model.pin()}
-            Button(L("保存")) {model.save()}
-            Button(L("主窗口")) {openMain()}
-            Button(action:copyAndClose) {Label(L("复制"),systemImage:"doc.on.doc")}.buttonStyle(.borderedProminent)
+            HStack(spacing:8) {
+                ImageDragChip(model:model)
+                Button(L("提取文字")) {openOCR()}.fixedSize()
+                Button(L("置顶")) {model.pin()}.fixedSize()
+                Button(L("保存")) {model.save()}.fixedSize()
+                Button(L("主窗口")) {openMain()}.fixedSize()
+                Button(action:copyAndClose) {Label(L("复制"),systemImage:"doc.on.doc")}.buttonStyle(.borderedProminent).fixedSize()
+            }
         }.controlSize(.small).padding(.horizontal,14)
     }
 

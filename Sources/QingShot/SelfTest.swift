@@ -5,6 +5,8 @@ enum SelfTest {
     static func run() {
         var failures = 0
         func check(_ condition:Bool,_ label:String) {print("\(condition ? "PASS" : "FAIL") \(label)");if !condition {failures += 1}}
+        let escape = NSEvent.keyEvent(with:.keyDown,location:.zero,modifierFlags:[],timestamp:0,windowNumber:0,context:nil,characters:"\u{1b}",charactersIgnoringModifiers:"\u{1b}",isARepeat:false,keyCode:53)!
+        check(CaptureKeyRouter.action(escape) == .cancel,"Esc key routes to cancel")
         let suite = "qingshot.post-capture.self-test"
         let defaults = UserDefaults(suiteName:suite)!
         defaults.removePersistentDomain(forName:suite)

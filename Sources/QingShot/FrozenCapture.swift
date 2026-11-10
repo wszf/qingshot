@@ -242,13 +242,18 @@ enum FrozenCapture {
             } else {
                 view.onCapture = { [weak self] rect in self?.finish(rect) }
             }
+            window.onCancel = { [weak self] in self?.cancel() }
             window.contentView = view
             window.makeFirstResponder(view)
             window.orderFrontRegardless()
             windows.append(window)
         }
-        (windows.first { $0.frame.contains(mouse) } ?? windows.first)?.makeKeyAndOrderFront(nil)
-        if isInline {installMonitor()}
+        NSApp.activate(ignoringOtherApps: true)
+        if let key = windows.first(where: { $0.frame.contains(mouse) }) ?? windows.first {
+            key.makeKeyAndOrderFront(nil)
+            key.makeFirstResponder(key.contentView)
+        }
+        installMonitor()
     }
 
     func cancel() {
@@ -340,6 +345,10 @@ enum FrozenCapture {
                   self.windows.contains(where: { $0 === window }) || window === self.toolbar,
                   CaptureKeyRouter.isTextInput(window) == false,
                   let action = CaptureKeyRouter.action(event) else { return event }
+            if !self.isInline {
+                if case .cancel = action { self.cancel(); return nil }
+                return event
+            }
             switch action {
             case .cancel:
                 self.finishInline(kept: false)
@@ -374,8 +383,13 @@ enum FrozenCapture {
 }
 
 final class FrozenOverlayWindow: NSWindow {
+    var onCancel:(()->Void)?
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
+    override func keyDown(with event:NSEvent) {
+        if event.keyCode == 53 {onCancel?()} else {super.keyDown(with:event)}
+    }
+    override func cancelOperation(_ sender:Any?) {onCancel?()}
 }
 
 private enum InlineHandle: CaseIterable {case topLeft, top, topRight, right, bottomRight, bottom, bottomLeft, left}
@@ -738,11 +752,15 @@ final class FrozenOverlayView: NSView {
     }
 
     override func keyDown(with event: NSEvent) {
-        if inlineMode {
-            if event.keyCode == 53 {onInlineCancel?()} else {super.keyDown(with: event)}
+        if event.keyCode == 53 {
+            if inlineMode {onInlineCancel?()} else {onCancel?()}
             return
         }
-        if event.keyCode == 53 {draft = nil;needsDisplay = true} else {super.keyDown(with: event)}
+        super.keyDown(with: event)
+    }
+
+    override func cancelOperation(_ sender:Any?) {
+        if inlineMode {onInlineCancel?()} else {onCancel?()}
     }
 
     override func updateTrackingAreas() {
