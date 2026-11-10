@@ -145,9 +145,9 @@ final class CarbonHotkeys: HotkeyRegistering {
     init(shortcuts:ShortcutStore) {self.shortcuts = shortcuts}
     func show() {
         if window == nil {
-            let w = NSWindow(contentRect:NSRect(x:0,y:0,width:640,height:760),styleMask:[.titled,.closable],backing:.buffered,defer:false)
+            let w = NSWindow(contentRect:NSRect(x:0,y:0,width:640,height:800),styleMask:[.titled,.closable],backing:.buffered,defer:false)
             w.title = L("轻截图设置");w.isReleasedWhenClosed = false;w.delegate = self
-            w.contentView = NSHostingView(rootView:ShortcutSettingsView(store:shortcuts).preferredColorScheme(.light));w.center();window = w
+            w.contentView = NSHostingView(rootView:ShortcutSettingsView(store:shortcuts));w.center();window = w
         }
         NSApp.unhide(nil);NSApp.activate(ignoringOtherApps:true);window?.makeKeyAndOrderFront(nil)
     }
@@ -159,6 +159,7 @@ struct ShortcutSettingsView:View {
     @ObservedObject var languageStore = LanguageStore.shared
     @ObservedObject var store:ShortcutStore
     @ObservedObject var updates = UpdateManager.shared
+    @ObservedObject var appearance = AppearanceStore.shared
     @State private var postCaptureMode = PostCaptureMode.stored()
     var body:some View {
         VStack(alignment:.leading,spacing:16) {
@@ -171,6 +172,13 @@ struct ShortcutSettingsView:View {
                     ForEach(AppLanguage.allCases) {language in Text(language.title).tag(language)}
                 }.pickerStyle(.menu).frame(maxWidth:340,alignment:.leading)
                 Text(L("更改语言后立即生效。系统文件对话框跟随 macOS 的语言设置。")).font(.system(size:11)).foregroundStyle(.secondary)
+            }
+            HStack(spacing:12) {
+                Text(L("外观")).font(.system(size:12,weight:.medium)).frame(width:40,alignment:.leading)
+                Picker(L("外观"),selection:$appearance.selection) {
+                    ForEach(AppAppearance.allCases) {mode in Text(mode.title).tag(mode)}
+                }.labelsHidden().pickerStyle(.segmented).frame(width:310)
+                Spacer()
             }
             VStack(alignment:.leading,spacing:8) {
                 Text(L("截图后编辑方式")).font(.system(size:12,weight:.medium))
@@ -197,11 +205,11 @@ struct ShortcutSettingsView:View {
                     }.padding(.horizontal,18).padding(.vertical,14)
                     if action != .full {Divider().padding(.leading,54)}
                 }
-            }.background(.white).clipShape(RoundedRectangle(cornerRadius:12)).overlay(RoundedRectangle(cornerRadius:12).stroke(.gray.opacity(0.12)))
+            }.background(Theme.card).clipShape(RoundedRectangle(cornerRadius:12)).overlay(RoundedRectangle(cornerRadius:12).stroke(Theme.stroke))
             HStack(alignment:.top,spacing:8) {Image(systemName:store.isError ? "exclamationmark.circle" : store.recording == nil ? "checkmark.circle" : "keyboard");Text(store.message).fixedSize(horizontal:false,vertical:true)}.font(.system(size:12)).foregroundStyle(store.isError ? Color.red : accent).frame(minHeight:32,alignment:.topLeading)
             Text(L("使用 ⌘ Command 或 ⌃ Control 搭配其他按键。快捷键全局生效；关闭编辑器后仍可使用。按键名称按美式键盘物理位置显示。")).font(.system(size:11)).foregroundStyle(.secondary).lineSpacing(4)
             Divider()
             HStack {Button(L("恢复默认")) {store.restoreDefaults()};Spacer();if store.recording != nil {Button(L("取消录入")) {store.cancelRecording()}};Text(L("自动保存 · 即时生效")).font(.system(size:11)).foregroundStyle(.secondary)}
-        }.padding(28).frame(width:640,height:760).background(Color(nsColor:NSColor(hex:0xF6F8F5))).tint(accent)
+        }.padding(28).frame(width:640,height:800).background(Theme.settings).tint(accent)
     }
 }

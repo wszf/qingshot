@@ -7,6 +7,14 @@ enum SelfTest {
         func check(_ condition:Bool,_ label:String) {print("\(condition ? "PASS" : "FAIL") \(label)");if !condition {failures += 1}}
         let escape = NSEvent.keyEvent(with:.keyDown,location:.zero,modifierFlags:[],timestamp:0,windowNumber:0,context:nil,characters:"\u{1b}",charactersIgnoringModifiers:"\u{1b}",isARepeat:false,keyCode:53)!
         check(CaptureKeyRouter.action(escape) == .cancel,"Esc key routes to cancel")
+        let appearanceSuite = "qingshot.appearance.self-test"
+        let appearanceDefaults = UserDefaults(suiteName:appearanceSuite)!
+        appearanceDefaults.removePersistentDomain(forName:appearanceSuite)
+        check(AppAppearance.stored(in:appearanceDefaults) == .system,"Appearance defaults to system")
+        appearanceDefaults.set(AppAppearance.dark.rawValue,forKey:AppAppearance.defaultsKey)
+        check(AppAppearance.stored(in:appearanceDefaults) == .dark,"Appearance setting persists")
+        appearanceDefaults.removePersistentDomain(forName:appearanceSuite)
+        check(AppAppearance.light.appearance?.name == .aqua && AppAppearance.dark.appearance?.name == .darkAqua && AppAppearance.system.appearance == nil,"Appearance maps to NSAppearance")
         let suite = "qingshot.post-capture.self-test"
         let defaults = UserDefaults(suiteName:suite)!
         defaults.removePersistentDomain(forName:suite)

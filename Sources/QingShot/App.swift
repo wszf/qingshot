@@ -40,9 +40,10 @@ import Sparkle
     var recordObserver:AnyCancellable?
     var languageObserver:AnyCancellable?
     func applicationDidFinishLaunching(_ notification:Notification) {
+        AppearanceStore.shared.apply()
         let w = NSWindow(contentRect:NSRect(x:0,y:0,width:1180,height:790),styleMask:[.titled,.closable,.miniaturizable,.resizable],backing:.buffered,defer:false)
         w.title = L("轻截图 QingShot"); w.titlebarAppearsTransparent = true; w.isReleasedWhenClosed = false
-        w.contentView = NSHostingView(rootView:ContentView(model:model).preferredColorScheme(.light)); w.minSize = CGSize(width:1040,height:730);w.center();model.window = w
+        w.contentView = NSHostingView(rootView:ContentView(model:model)); w.minSize = CGSize(width:1040,height:730);w.center();model.window = w
         setupMenu(); setupStatus(); setupHotkeys();model.showWindow()
         _ = UpdateManager.shared
         languageObserver = LanguageStore.shared.$selection.dropFirst().receive(on:RunLoop.main).sink { [weak self] _ in

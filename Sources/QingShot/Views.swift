@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-let accent = Color(red:0.20,green:0.48,blue:0.39)
+let accent = Theme.accent
 struct ContentView: View {
     @ObservedObject var languageStore = LanguageStore.shared
     @ObservedObject var shortcuts = ShortcutStore.shared
@@ -16,7 +16,7 @@ struct ContentView: View {
                 if model.image != nil {
                     tools
                     Divider()
-                    CanvasBridge(model:model).frame(maxWidth:.infinity,maxHeight:.infinity).background(Color(nsColor:NSColor(hex:0xE8ECE8)))
+                    CanvasBridge(model:model).frame(maxWidth:.infinity,maxHeight:.infinity).background(Theme.canvas)
                     Divider()
                     bottom
                 } else {welcome.frame(maxWidth:.infinity,maxHeight:.infinity)}
@@ -26,8 +26,8 @@ struct ContentView: View {
                     Spacer()
                     if model.busy || model.recordStarting {ProgressView().controlSize(.small)}
                     Text(L("本地处理")).font(.system(size:10)).foregroundStyle(.tertiary)
-                }.padding(.horizontal,18).frame(height:34).background(.background)
-            }
+                }.padding(.horizontal,18).frame(height:34).background(Theme.window)
+            }.background(Theme.window)
         }.tint(accent).frame(minWidth:1080,minHeight:700).environment(\.locale,Locale(identifier:Localization.languageCode()))
         .sheet(isPresented:$model.showOCR) {
             VStack(alignment:.leading,spacing:16) {
@@ -57,10 +57,10 @@ struct ContentView: View {
                     ForEach(model.history) {item in
                         Button {model.load(item.image,name:L("历史截图"),save:false)} label: {
                             HStack(spacing:10) {
-                                Image(nsImage:item.image).resizable().scaledToFit().frame(width:55,height:42).background(Color.white.opacity(0.5)).clipShape(RoundedRectangle(cornerRadius:5))
+                                Image(nsImage:item.image).resizable().scaledToFit().frame(width:55,height:42).background(Theme.thumb).clipShape(RoundedRectangle(cornerRadius:5))
                                 VStack(alignment:.leading,spacing:4) {Text(item.date,format:.dateTime.hour().minute()).font(.system(size:12,weight:.medium)); Text("\(Int(item.image.pixelSize.width)) × \(Int(item.image.pixelSize.height))").font(.system(size:9,design:.monospaced)).foregroundStyle(.secondary)}
                                 Spacer(minLength:0)
-                            }.padding(8).background(.white.opacity(0.50)).clipShape(RoundedRectangle(cornerRadius:9))
+                            }.padding(8).background(Theme.card.opacity(0.62)).clipShape(RoundedRectangle(cornerRadius:9))
                         }.buttonStyle(.plain).contextMenu {Button(L("从历史记录删除"),role:.destructive) {model.deleteHistory(item)}}
                     }
                     if model.history.isEmpty {Text(L("截图与导入图片会保存在这里\n标注后请保存导出")).font(.system(size:11)).foregroundStyle(.tertiary).lineSpacing(5).frame(maxWidth:.infinity,alignment:.leading).padding(8)}
@@ -68,7 +68,7 @@ struct ContentView: View {
             }
             Spacer(minLength:8)
             Button {(NSApp.delegate as? AppDelegate)?.settings()} label: {HStack {Image(systemName:"gearshape"); Text(L("设置与快捷键")); Spacer(); Text("⌘,").font(.system(size:10,design:.monospaced))}.font(.system(size:11)).foregroundStyle(.secondary).padding(18)}.buttonStyle(.plain)
-        }.background(Color(nsColor:NSColor(hex:0xF2F5F1)))
+        }.background(Theme.sidebar)
     }
     func sideButton(_ title:String,_ icon:String,_ key:String,action:@escaping () -> Void) -> some View {
         Button(action:action) {HStack {Image(systemName:icon).frame(width:20).foregroundStyle(accent); Text(title); Spacer(); Text(key).font(.system(size:10,design:.monospaced)).foregroundStyle(.tertiary)}.font(.system(size:12)).padding(.vertical,9).padding(.horizontal,8)}.buttonStyle(.plain).disabled(model.busy || model.recordStarting)
@@ -89,8 +89,11 @@ struct ContentView: View {
                 Button {model.tool = t} label: {VStack(spacing:4) {Image(systemName:t.icon).font(.system(size:15,weight:.medium)).frame(height:19); Text(t.label).font(.system(size:9))}.frame(width:Localization.languageCode() == "en" ? 49 : 42,height:46).foregroundStyle(model.tool == t ? accent : Color.secondary).background(model.tool == t ? accent.opacity(0.12) : .clear).clipShape(RoundedRectangle(cornerRadius:8))}.buttonStyle(.plain).help(t.label)
             }
             Divider().frame(height:28).padding(.horizontal,8)
-            ColorPicker(L("颜色"),selection:$model.color,supportsOpacity:false).labelsHidden().frame(width:30)
-            Picker(L("线宽"),selection:$model.lineWidth) {Text(L("细")).tag(3.0);Text(L("中")).tag(5.0);Text(L("粗")).tag(9.0)}.labelsHidden().frame(width:Localization.languageCode() == "en" ? 85 : 65)
+            HStack(spacing:0) {
+                ColorPicker(L("颜色"),selection:$model.color,supportsOpacity:false).labelsHidden().frame(width:30)
+                Divider().frame(height:22).padding(.horizontal,10)
+                Picker(L("线宽"),selection:$model.lineWidth) {Text(L("细")).tag(3.0);Text(L("中")).tag(5.0);Text(L("粗")).tag(9.0)}.labelsHidden().pickerStyle(.menu).frame(width:Localization.languageCode() == "en" ? 72 : 58)
+            }.padding(.horizontal,6).padding(.vertical,2).background(Theme.chip).clipShape(Capsule()).fixedSize()
             Spacer(minLength:0)
             Button {model.undo()} label: {Image(systemName:"arrow.uturn.backward")}.disabled(model.undoStack.isEmpty).help(L("撤销 ⌘Z"))
             Button {model.redo()} label: {Image(systemName:"arrow.uturn.forward")}.disabled(model.redoStack.isEmpty).help(L("重做 ⇧⌘Z"))
@@ -100,22 +103,22 @@ struct ContentView: View {
         HStack(spacing:13) {
             Label(L("背景"),systemImage:"square.stack.3d.up").font(.system(size:11)).foregroundStyle(.secondary)
             ForEach(Backdrop.allCases) {bg in
-                Button {model.backdrop = bg} label: {HStack(spacing:5) {RoundedRectangle(cornerRadius:4).fill(LinearGradient(colors:bg == .none ? [.white,Color.gray.opacity(0.1)] : bg.colors.map {Color(nsColor:$0)},startPoint:.topLeading,endPoint:.bottomTrailing)).frame(width:20,height:20).overlay(RoundedRectangle(cornerRadius:4).stroke(.gray.opacity(0.2))); Text(bg.label).font(.system(size:11))}.padding(5).background(model.backdrop == bg ? accent.opacity(0.12) : .clear).clipShape(RoundedRectangle(cornerRadius:6))}.buttonStyle(.plain)
+                Button {model.backdrop = bg} label: {HStack(spacing:5) {RoundedRectangle(cornerRadius:4).fill(LinearGradient(colors:bg == .none ? [Theme.card,Color.gray.opacity(0.15)] : bg.colors.map {Color(nsColor:$0)},startPoint:.topLeading,endPoint:.bottomTrailing)).frame(width:20,height:20).overlay(RoundedRectangle(cornerRadius:4).stroke(.gray.opacity(0.2))); Text(bg.label).font(.system(size:11))}.padding(5).background(model.backdrop == bg ? accent.opacity(0.12) : .clear).clipShape(RoundedRectangle(cornerRadius:6))}.buttonStyle(.plain)
             }
             Spacer()
             if model.backdrop != .none {Text(L("留白")).font(.caption).foregroundStyle(.secondary); Slider(value:$model.padding,in:24...160,step:8).frame(width:85)}
             Text(L("自适应预览")).font(.system(size:10)).foregroundStyle(.tertiary)
-        }.padding(.horizontal,20).frame(height:55)
+        }.padding(.horizontal,20).frame(height:55).background(Theme.window)
     }
     var welcome: some View {
         VStack(alignment:.leading,spacing:0) {
             HStack {Image(systemName:"sparkle");Text(L("少一点操作，多一点专注")).tracking(2)}.font(.system(size:11,weight:.medium)).foregroundStyle(accent).padding(.bottom,20)
-            Text(L("好想法，\n一截即得。")).font(.system(size:52,weight:.bold)).tracking(-1).lineSpacing(4).foregroundStyle(Color(nsColor:NSColor(hex:0x203B30)))
+            Text(L("好想法，\n一截即得。")).font(.system(size:52,weight:.bold)).tracking(-1).lineSpacing(4).foregroundStyle(Theme.title)
             Text(L("从屏幕上的灵感，到清晰的表达。\n截图、标注、提取文字，在一个轻巧的工具里完成。")).font(.system(size:15)).foregroundStyle(.secondary).lineSpacing(7).padding(.top,20)
             HStack(spacing:12) {Button {model.capture("area")} label: {Label(L("开始截图"),systemImage:"viewfinder").padding(.horizontal,12).padding(.vertical,8)}.buttonStyle(.borderedProminent); Button(L("试用演示图")) {model.demo()}.buttonStyle(.bordered).controlSize(.large)}.padding(.top,30)
             HStack(spacing:24) {feature("viewfinder",L("快捷捕捉"),L("全局快捷键，随时截取")); feature("pencil.tip.crop.circle",L("清晰标注"),L("箭头、文字与重点遮盖")); feature("sparkles",L("轻松分享"),L("背景美化，一键复制"))}.padding(.top,48)
             Text(L("首次截图需允许屏幕录制权限 · 最近 30 张原图保存在本机")).font(.system(size:10)).foregroundStyle(.tertiary).padding(.top,36)
-        }.padding(45).frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.leading).background(Color(nsColor:NSColor(hex:0xFAFBF8)))
+        }.padding(45).frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.leading).background(Theme.welcome)
     }
     func feature(_ icon:String,_ title:String,_ subtitle:String) -> some View {VStack(alignment:.leading,spacing:10) {Image(systemName:icon).font(.system(size:22)).foregroundStyle(accent);Text(title).font(.system(size:13,weight:.semibold));Text(subtitle).font(.system(size:10)).foregroundStyle(.secondary)}.frame(maxWidth:.infinity,alignment:.leading)}
 }

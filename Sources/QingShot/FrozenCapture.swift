@@ -301,7 +301,10 @@ enum FrozenCapture {
 
     private func showToolbar(selection: NSRect) {
         guard let model else { return }
-        let size = CGSize(width: 820, height: 46)
+        let center = NSPoint(x: selection.midX, y: selection.midY)
+        let screen = NSScreen.screens.first { $0.frame.contains(center) } ?? NSScreen.main
+        let width = min(820, max(320, (screen?.frame.width ?? 820) - 16))
+        let size = CGSize(width: width, height: width >= 800 ? 46 : 72)
         let content = InlineToolbarView(
             model: model,
             onCancel: { [weak self] in self?.finishInline(kept: false) },
@@ -312,7 +315,6 @@ enum FrozenCapture {
             onMain: { [weak self] in self?.finishInline(kept: true); model.showWindow() }
         )
         let host = NSHostingView(rootView: content)
-        host.appearance = NSAppearance(named: .aqua)
         host.frame = NSRect(origin: .zero, size: size)
         let panel = InlineToolbarPanel(contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered, defer: false)
         panel.isReleasedWhenClosed = false
@@ -321,7 +323,6 @@ enum FrozenCapture {
         panel.hasShadow = true
         panel.level = NSWindow.Level(rawValue: Self.overlayLevel.rawValue + 1)
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
-        panel.appearance = NSAppearance(named: .aqua)
         panel.contentView = host
         toolbar = panel
         NSColorPanel.shared.level = NSWindow.Level(rawValue: Self.overlayLevel.rawValue + 3)

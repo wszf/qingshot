@@ -120,8 +120,6 @@ final class PostCapturePanel:NSPanel {
         panel.level = .floating;panel.hidesOnDeactivate = false;panel.isFloatingPanel = true
         panel.collectionBehavior = [.canJoinAllSpaces,.fullScreenAuxiliary]
         let host = NSHostingView(rootView:PostCaptureEditorView(model:model, controller:self, close:{ [weak self] in self?.close() }, copyAndClose:{ [weak self] in self?.copyAndClose() }, openMain:{ [weak self] in self?.openMain() }))
-        host.appearance = NSAppearance(named:.aqua)
-        panel.appearance = NSAppearance(named:.aqua)
         panel.contentView = host
         panel.setFrame(NSRect(origin:PostCaptureLayout.centeredOrigin(size:size,in:screen.visibleFrame),size:size),display:false)
         self.panel = panel
@@ -214,10 +212,10 @@ struct PostCaptureEditorView: View {
             Divider()
             bottomBar.frame(height:58)
         }
-        .background(Color(nsColor:NSColor(hex:0xFAFBF8)))
+        .background(Theme.panel)
         .clipShape(RoundedRectangle(cornerRadius:14))
-        .overlay(RoundedRectangle(cornerRadius:14).stroke(.black.opacity(0.14)))
-        .tint(accent).preferredColorScheme(.light)
+        .overlay(RoundedRectangle(cornerRadius:14).stroke(Theme.stroke))
+        .tint(accent)
         .onChange(of:controller.ocrState) {_,state in
             if case .result = state {ocrFocused = true} else {ocrFocused = false}
         }
@@ -236,15 +234,16 @@ struct PostCaptureEditorView: View {
                             }.buttonStyle(.plain).help(tool.label)
                         }
                     }.fixedSize()
-                    Divider().frame(height:24).padding(.horizontal,10)
-                    HStack(spacing:8) {
+                    Divider().frame(height:24).padding(.horizontal,12)
+                    HStack(spacing:0) {
                         ColorPicker(L("颜色"),selection:$model.color,supportsOpacity:false).labelsHidden().frame(width:30,height:30).fixedSize()
+                        Divider().frame(height:20).padding(.horizontal,12)
                         lineWidthMenu
                     }
-                    .padding(.horizontal,7).padding(.vertical,2)
-                    .background(.black.opacity(0.035)).clipShape(Capsule())
+                    .padding(.horizontal,6).padding(.vertical,2)
+                    .background(Theme.chip).clipShape(Capsule())
                     .fixedSize()
-                    Divider().frame(height:24).padding(.horizontal,10)
+                    Divider().frame(height:24).padding(.horizontal,12)
                     HStack(spacing:4) {
                         Button {model.undo()} label: {Image(systemName:"arrow.uturn.backward")}.buttonStyle(.plain).disabled(model.undoStack.isEmpty).help(L("撤销 ⌘Z"))
                         Button {model.redo()} label: {Image(systemName:"arrow.uturn.forward")}.buttonStyle(.plain).disabled(model.redoStack.isEmpty).help(L("重做 ⇧⌘Z"))
@@ -262,7 +261,7 @@ struct PostCaptureEditorView: View {
             Button {model.lineWidth = 9} label: {Text(L("粗"))}
         } label: {
             Image(systemName:"line.3.horizontal").font(.system(size:14,weight:.medium)).foregroundStyle(.secondary)
-                .frame(width:30,height:30).background(.black.opacity(0.04)).clipShape(RoundedRectangle(cornerRadius:7))
+                .frame(width:30,height:30)
         }
         .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
         .help(L("线宽") + " · " + (model.lineWidth >= 9 ? L("粗") : model.lineWidth >= 5 ? L("中") : L("细")))
@@ -307,10 +306,10 @@ struct PostCaptureEditorView: View {
             }
         }
         .padding(16)
-        .background(Color(nsColor:NSColor(hex:0xFDFDFC)).opacity(0.98))
+        .background(Theme.overlay.opacity(0.98))
         .clipShape(RoundedRectangle(cornerRadius:12))
-        .overlay(RoundedRectangle(cornerRadius:12).stroke(.black.opacity(0.16)))
-        .shadow(color:.black.opacity(0.18),radius:14,y:6)
+        .overlay(RoundedRectangle(cornerRadius:12).stroke(Theme.stroke))
+        .shadow(color:Theme.shadow,radius:14,y:6)
     }
 
     var bottomBar: some View {
@@ -344,7 +343,7 @@ struct PostCaptureEditorView: View {
 
     func backgroundsButton(_ background:Backdrop) -> some View {
         let selected = background == model.backdrop
-        let fill = background == .none ? Color.white : Color(nsColor:background.colors[1])
+        let fill = background == .none ? Theme.card : Color(nsColor:background.colors[1])
         return Button {model.backdrop = background} label: {
             Circle().fill(fill).frame(width:18,height:18).overlay(Circle().stroke(selected ? accent : Color.gray.opacity(0.3),lineWidth:selected ? 2 : 1))
         }.buttonStyle(.plain).help(background.label)
@@ -355,7 +354,7 @@ struct ImageDragChip: View {
     @ObservedObject var model:ShotModel
     var body: some View {
         Image(systemName:"square.and.arrow.up.on.square").font(.system(size:12)).frame(width:32,height:26)
-            .background(.black.opacity(0.05)).clipShape(RoundedRectangle(cornerRadius:5))
+            .background(Theme.chip).clipShape(RoundedRectangle(cornerRadius:5))
             .help(L("拖到其他应用"))
             .onDrag {
                 guard let data = model.output()?.png else {return NSItemProvider()}
@@ -379,7 +378,20 @@ struct InlineToolbarView:View {
     let onMain:()->Void
 
     var body:some View {
-        HStack(spacing:3) {
+        GeometryReader { geometry in
+            if geometry.size.width >= 800 {
+                singleRow
+            } else {
+                twoRows
+            }
+        }
+        .background(Theme.toolbar).clipShape(RoundedRectangle(cornerRadius:12))
+        .overlay(RoundedRectangle(cornerRadius:12).stroke(Theme.stroke))
+        .tint(accent)
+    }
+
+    var toolGroup:some View {
+        HStack(spacing:2) {
             ForEach(MarkTool.allCases) {tool in
                 Button {model.tool = tool} label: {
                     Image(systemName:tool.icon).font(.system(size:13,weight:.medium)).frame(width:27,height:28)
@@ -387,24 +399,74 @@ struct InlineToolbarView:View {
                         .background(model.tool == tool ? accent.opacity(0.13) : .clear).clipShape(RoundedRectangle(cornerRadius:6))
                 }.buttonStyle(.plain).help(tool.label)
             }
-            Divider().frame(height:22).padding(.horizontal,5)
-            ColorPicker(L("颜色"),selection:$model.color,supportsOpacity:false).labelsHidden().frame(width:26)
-            Picker(L("线宽"),selection:$model.lineWidth) {Text(L("细")).tag(3.0);Text(L("中")).tag(5.0);Text(L("粗")).tag(9.0)}.labelsHidden().pickerStyle(.segmented).frame(width:112)
-            Divider().frame(height:22).padding(.horizontal,5)
+        }.fixedSize()
+    }
+
+    var colorWidthGroup:some View {
+        HStack(spacing:0) {
+            ColorPicker(L("颜色"),selection:$model.color,supportsOpacity:false).labelsHidden().frame(width:26,height:28).fixedSize()
+            Divider().frame(height:20).padding(.horizontal,12)
+            Picker(L("线宽"),selection:$model.lineWidth) {Text(L("细")).tag(3.0);Text(L("中")).tag(5.0);Text(L("粗")).tag(9.0)}.labelsHidden().pickerStyle(.segmented).frame(width:112).fixedSize()
+        }
+        .padding(.horizontal,6).padding(.vertical,2)
+        .background(Theme.chip).clipShape(Capsule())
+        .fixedSize()
+    }
+
+    var undoGroup:some View {
+        HStack(spacing:3) {
             Button {model.undo()} label: {Image(systemName:"arrow.uturn.backward")}.buttonStyle(.plain).disabled(model.undoStack.isEmpty).help(L("撤销 ⌘Z"))
             Button {model.redo()} label: {Image(systemName:"arrow.uturn.forward")}.buttonStyle(.plain).disabled(model.redoStack.isEmpty).help(L("重做 ⇧⌘Z"))
-            Divider().frame(height:22).padding(.horizontal,5)
+        }.fixedSize()
+    }
+
+    var actionGroup:some View {
+        HStack(spacing:3) {
             Button(action:onPin) {Image(systemName:"pin")}.buttonStyle(.plain).help(L("置顶"))
             Button(action:onOCR) {Image(systemName:"text.viewfinder")}.buttonStyle(.plain).help(L("提取文字"))
             Button(action:onSave) {Image(systemName:"square.and.arrow.down")}.buttonStyle(.plain).help(L("保存"))
             Button(action:onMain) {Image(systemName:"macwindow")}.buttonStyle(.plain).help(L("主窗口"))
-            Spacer(minLength:4)
+        }.fixedSize()
+    }
+
+    var endGroup:some View {
+        HStack(spacing:4) {
             Button(action:onCancel) {Image(systemName:"xmark")}.buttonStyle(.plain).help(L("取消"))
             Button(action:onCopy) {Label(L("复制"),systemImage:"checkmark")}.buttonStyle(.borderedProminent)
+        }.fixedSize()
+    }
+
+    var singleRow:some View {
+        HStack(spacing:3) {
+            toolGroup
+            Divider().frame(height:22).padding(.horizontal,10)
+            colorWidthGroup
+            Divider().frame(height:22).padding(.horizontal,10)
+            undoGroup
+            Divider().frame(height:22).padding(.horizontal,10)
+            actionGroup
+            Spacer(minLength:4)
+            endGroup
         }
-        .controlSize(.small).padding(.horizontal,10).frame(height:46)
-        .background(.regularMaterial).clipShape(RoundedRectangle(cornerRadius:12))
-        .overlay(RoundedRectangle(cornerRadius:12).stroke(.black.opacity(0.14)))
-        .tint(accent).preferredColorScheme(.light)
+        .controlSize(.small).padding(.horizontal,10)
+    }
+
+    var twoRows:some View {
+        VStack(spacing:4) {
+            HStack(spacing:3) {
+                toolGroup
+                Divider().frame(height:22).padding(.horizontal,10)
+                colorWidthGroup
+                Spacer(minLength:0)
+            }
+            HStack(spacing:3) {
+                undoGroup
+                Divider().frame(height:22).padding(.horizontal,10)
+                actionGroup
+                Spacer(minLength:4)
+                endGroup
+            }
+        }
+        .controlSize(.small).padding(.horizontal,10).padding(.vertical,4)
     }
 }

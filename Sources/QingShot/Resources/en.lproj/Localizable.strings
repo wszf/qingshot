@@ -189,6 +189,9 @@
 "自动保存 · 即时生效" = "Auto-saved · Active immediately";
 "语言" = "Language";
 "跟随系统" = "System Default";
+"外观" = "Appearance";
+"浅色" = "Light";
+"深色" = "Dark";
 "更改语言后立即生效。系统文件对话框跟随 macOS 的语言设置。" = "Changes apply immediately. System file dialogs follow your macOS language.";
 "截图后编辑方式" = "After Capture";
 "居中小编辑器" = "Centered Editor";
