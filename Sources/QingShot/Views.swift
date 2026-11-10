@@ -119,31 +119,25 @@ struct ContentView: View {
     }
     func feature(_ icon:String,_ title:String,_ subtitle:String) -> some View {VStack(alignment:.leading,spacing:10) {Image(systemName:icon).font(.system(size:22)).foregroundStyle(accent);Text(title).font(.system(size:13,weight:.semibold));Text(subtitle).font(.system(size:10)).foregroundStyle(.secondary)}.frame(maxWidth:.infinity,alignment:.leading)}
 }
-struct QuickView: View {
-    @ObservedObject var languageStore = LanguageStore.shared
-    @ObservedObject var model:ShotModel
-    var body: some View {
-        VStack(spacing:12) {
-            HStack {Text(L("已捕捉")).font(.system(size:12,weight:.semibold)); Spacer(); Button {model.quickPanel?.orderOut(nil)} label: {Image(systemName:"xmark")}.buttonStyle(.plain)}
-            if let image = model.image {Image(nsImage:image).resizable().scaledToFit().frame(height:128).frame(maxWidth:.infinity).background(.black.opacity(0.04)).clipShape(RoundedRectangle(cornerRadius:8))}
-            HStack {Button(L("标注")) {model.quickPanel?.orderOut(nil); model.showWindow()}; Button(L("置顶")) {model.pin()}; Spacer(); Button(L("复制")) {model.copy();model.quickPanel?.orderOut(nil)}.buttonStyle(.borderedProminent)}
-        }.padding(16).background(.regularMaterial).clipShape(RoundedRectangle(cornerRadius:16)).tint(accent).padding(2)
-    }
-}
 struct CanvasBridge:NSViewRepresentable {
     @ObservedObject var model:ShotModel
-    func makeNSView(context:Context) -> EditorCanvas {let v = EditorCanvas(); v.model = model; return v}
-    func updateNSView(_ view:EditorCanvas,context:Context) {view.model = model; view.preview = model.output(); view.needsDisplay = true}
+    var inset:CGFloat = 64
+    var maxScale:CGFloat = .infinity
+    func makeNSView(context:Context) -> EditorCanvas {let v = EditorCanvas(); v.model = model; v.inset = inset; v.maxScale = maxScale; return v}
+    func updateNSView(_ view:EditorCanvas,context:Context) {view.model = model; view.inset = inset; view.maxScale = maxScale; view.preview = model.output(); view.needsDisplay = true}
 }
 final class EditorCanvas:NSView {
     var model:ShotModel!
     var preview:NSImage?
     var draft:Mark?
+    var inset:CGFloat = 64
+    var maxScale:CGFloat = .infinity
     override var isFlipped:Bool {true}
     override var acceptsFirstResponder:Bool {true}
     var outputRect:CGRect {
         guard let preview else {return .zero}; let s = preview.pixelSize
-        let scale = min((bounds.width-64)/s.width,(bounds.height-64)/s.height)
+        let available = CGSize(width:max(1,bounds.width-inset*2),height:max(1,bounds.height-inset*2))
+        let scale = min(maxScale,available.width/s.width,available.height/s.height)
         let size = CGSize(width:s.width*scale,height:s.height*scale)
         return CGRect(x:(bounds.width-size.width)/2,y:(bounds.height-size.height)/2,width:size.width,height:size.height)
     }

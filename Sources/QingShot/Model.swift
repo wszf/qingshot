@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 
 struct HistoryItem: Identifiable { let id: URL; let image: NSImage; let date: Date }
 struct EditState { let image: NSImage; let marks: [Mark] }
+struct InlineBackup { let image:NSImage?; let marks:[Mark]; let name:String; let status:String; let undo:[EditState]; let redo:[EditState] }
 @MainActor final class ShotModel: ObservableObject {
     static let shared = ShotModel()
     @Published var image: NSImage?
@@ -27,9 +28,11 @@ struct EditState { let image: NSImage; let marks: [Mark] }
     var undoStack: [EditState] = [], redoStack: [EditState] = []
     var window: NSWindow?
     var quickPanel: NSPanel?
+    lazy var postCapture = PostCaptureController(model:self)
     var pins: [NSWindow] = []
     var didRequestScreenAccess = false
     var captureSession: FrozenCaptureSession?
+    var inlineBackup: InlineBackup?
     var recorder: ScreenRecorder?
     var historyURL: URL {
         FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("QingShot/History",isDirectory:true)
@@ -65,9 +68,10 @@ struct EditState { let image: NSImage; let marks: [Mark] }
     func crop(_ rect:CGRect) { guard let image,rect.width >= 4,rect.height >= 4 else {return}; checkpoint(); self.image = Renderer.crop(Renderer.render(image,marks:marks),rect:rect); marks = []; status = L("已裁剪 · ⌘Z 可撤销") }
     func output() -> NSImage? { guard let image else {return nil}; return Renderer.render(image,marks:marks,backdrop:backdrop,padding:padding) }
     func copy() { guard let img = output(), let data = img.png else {return}; NSPasteboard.general.clearContents(); NSPasteboard.general.setData(data,forType:.png); status = L("已复制图片，可粘贴到其他应用") }
-    func save() {
+    func save(elevated:Bool = false) {
         guard let img = output(),let data = img.png else {return}
         let panel = NSSavePanel(); panel.allowedContentTypes = [.png]; panel.nameFieldStringValue = "QingShot-\(Int(Date().timeIntervalSince1970)).png"
+        if elevated {panel.level = NSWindow.Level(rawValue:NSWindow.Level.screenSaver.rawValue+2)}
         if panel.runModal() == .OK, let url = panel.url { do {try data.write(to:url,options:.atomic); status = L("已保存到 {0}" ,"\(url.lastPathComponent)")} catch {alert(L("保存失败"),error.localizedDescription)} }
     }
     func openImage() {
@@ -79,7 +83,7 @@ struct EditState { let image: NSImage; let marks: [Mark] }
     func capture(_ mode:String) {
         guard !busy, !recording, !recordStarting else {return}
         guard ensureScreenCaptureAccess() else {return}
-        busy = true; quickPanel?.orderOut(nil); let wasVisible = window?.isVisible ?? false
+        busy = true; postCapture.close(); let wasVisible = window?.isVisible ?? false
         let mouse = NSEvent.mouseLocation
         window?.orderOut(nil); pins.forEach {$0.orderOut(nil)}; NSApp.hide(nil)
         status = L("正在冻结屏幕…")
@@ -97,6 +101,19 @@ struct EditState { let image: NSImage; let marks: [Mark] }
                     self.presentCapture(frame?.image, mode:mode, wasVisible:wasVisible)
                     return
                 }
+                if mode != "full", PostCaptureMode.stored() == .inline {
+                    let session = FrozenCaptureSession(snapshot:snapshot, mode:mode, model:self) { [weak self] kept in
+                        guard let self else {return}
+                        self.captureSession = nil; self.busy = false
+                        self.pins.forEach {$0.orderFrontRegardless()}
+                        if kept {self.finishInlineCapture()}
+                        else {self.cancelInlineCapture();if wasVisible {self.showWindow()}}
+                    }
+                    self.captureSession = session
+                    self.status = L("在选区上直接标注 · 回车复制 · Esc 取消")
+                    session.start()
+                    return
+                }
                 let session = FrozenCaptureSession(snapshot:snapshot, mode:mode) { [weak self] image in
                     self?.presentCapture(image, mode:mode, wasVisible:wasVisible)
                 }
@@ -110,6 +127,28 @@ struct EditState { let image: NSImage; let marks: [Mark] }
             }
         }
     }
+    func beginInlineCapture(_ image:NSImage, name:String) {
+        inlineBackup = InlineBackup(image:image,marks:marks,name:self.name,status:status,undo:undoStack,redo:redoStack)
+        load(image,name:name,save:false)
+    }
+    func updateInlineImage(_ image:NSImage) {
+        guard inlineBackup != nil,marks.isEmpty else {return}
+        self.image = image;undoStack = [];redoStack = [];revision += 1
+    }
+    func finishInlineCapture() {
+        guard inlineBackup != nil else {return}
+        inlineBackup = nil
+        if let image {remember(image)}
+        status = L("标注完成 · 可在主窗口继续美化或保存")
+    }
+    func cancelInlineCapture() {
+        if let backup = inlineBackup {
+            image = backup.image;marks = backup.marks;name = backup.name;status = backup.status
+            undoStack = backup.undo;redoStack = backup.redo;revision += 1
+        }
+        inlineBackup = nil
+        status = L("已取消截图")
+    }
     func presentCapture(_ image:NSImage?, mode:String, wasVisible:Bool, failed:Bool = false) {
         busy = false; captureSession = nil
         pins.forEach {$0.orderFrontRegardless()}
@@ -120,16 +159,7 @@ struct EditState { let image: NSImage; let marks: [Mark] }
             if wasVisible {showWindow()}
         }
     }
-    func showQuickPanel() {
-        quickPanel?.close()
-        let panel = NSPanel(contentRect:NSRect(x:0,y:0,width:300,height:244),styleMask:[.nonactivatingPanel,.borderless],backing:.buffered,defer:false)
-        panel.isReleasedWhenClosed = false; panel.level = .floating; panel.isOpaque = false; panel.backgroundColor = .clear; panel.hasShadow = true
-        panel.collectionBehavior = [.canJoinAllSpaces,.fullScreenAuxiliary]
-        panel.contentView = NSHostingView(rootView:QuickView(model:self))
-        // Center on the display the capture happened on, so it is easy to reach.
-        let frame = (NSScreen.screens.first {$0.frame.contains(NSEvent.mouseLocation)} ?? NSScreen.main)?.visibleFrame ?? .zero
-        panel.setFrameOrigin(CGPoint(x:frame.midX-panel.frame.width/2,y:frame.midY-panel.frame.height/2)); panel.orderFrontRegardless(); quickPanel = panel
-    }
+    func showQuickPanel() {postCapture.show()}
     func pin() {
         guard let img = output() else {return}
         let s = img.pixelSize, factor = min(1,480/s.width,600/s.height)

@@ -145,7 +145,7 @@ final class CarbonHotkeys: HotkeyRegistering {
     init(shortcuts:ShortcutStore) {self.shortcuts = shortcuts}
     func show() {
         if window == nil {
-            let w = NSWindow(contentRect:NSRect(x:0,y:0,width:640,height:620),styleMask:[.titled,.closable],backing:.buffered,defer:false)
+            let w = NSWindow(contentRect:NSRect(x:0,y:0,width:640,height:700),styleMask:[.titled,.closable],backing:.buffered,defer:false)
             w.title = L("轻截图设置");w.isReleasedWhenClosed = false;w.delegate = self
             w.contentView = NSHostingView(rootView:ShortcutSettingsView(store:shortcuts).preferredColorScheme(.light));w.center();window = w
         }
@@ -158,8 +158,9 @@ final class CarbonHotkeys: HotkeyRegistering {
 struct ShortcutSettingsView:View {
     @ObservedObject var languageStore = LanguageStore.shared
     @ObservedObject var store:ShortcutStore
+    @State private var postCaptureMode = PostCaptureMode.stored()
     var body:some View {
-        VStack(alignment:.leading,spacing:20) {
+        VStack(alignment:.leading,spacing:16) {
             HStack(spacing:13) {
                 Image(systemName:"keyboard").font(.system(size:25)).foregroundStyle(accent).frame(width:52,height:52).background(accent.opacity(0.1)).clipShape(RoundedRectangle(cornerRadius:13))
                 VStack(alignment:.leading,spacing:5) {Text(L("截图快捷键")).font(.system(size:22,weight:.semibold));Text(L("随手一按，捕捉眼前的灵感。")).foregroundStyle(.secondary).font(.system(size:12))}
@@ -170,6 +171,13 @@ struct ShortcutSettingsView:View {
                 }.pickerStyle(.menu).frame(maxWidth:340,alignment:.leading)
                 Text(L("更改语言后立即生效。系统文件对话框跟随 macOS 的语言设置。")).font(.system(size:11)).foregroundStyle(.secondary)
             }
+            VStack(alignment:.leading,spacing:8) {
+                Text(L("截图后编辑方式")).font(.system(size:12,weight:.medium))
+                Picker(L("截图后编辑方式"),selection:$postCaptureMode) {
+                    ForEach(PostCaptureMode.allCases) {mode in Text(mode.title).tag(mode)}
+                }.labelsHidden().pickerStyle(.segmented).frame(maxWidth:420,alignment:.leading)
+                Text(L("仅影响区域截图和窗口截图；全屏截图使用居中小编辑器。")).font(.system(size:11)).foregroundStyle(.secondary)
+            }.onChange(of:postCaptureMode) {_,mode in PostCaptureMode.save(mode)}
             VStack(spacing:0) {
                 ForEach(CaptureAction.allCases) {action in
                     HStack(spacing:12) {
@@ -188,6 +196,6 @@ struct ShortcutSettingsView:View {
             Text(L("使用 ⌘ Command 或 ⌃ Control 搭配其他按键。快捷键全局生效；关闭编辑器后仍可使用。按键名称按美式键盘物理位置显示。")).font(.system(size:11)).foregroundStyle(.secondary).lineSpacing(4)
             Divider()
             HStack {Button(L("恢复默认")) {store.restoreDefaults()};Spacer();if store.recording != nil {Button(L("取消录入")) {store.cancelRecording()}};Text(L("自动保存 · 即时生效")).font(.system(size:11)).foregroundStyle(.secondary)}
-        }.padding(28).frame(width:640,height:620).background(Color(nsColor:NSColor(hex:0xF6F8F5))).tint(accent)
+        }.padding(28).frame(width:640,height:700).background(Color(nsColor:NSColor(hex:0xF6F8F5))).tint(accent)
     }
 }
