@@ -89,9 +89,12 @@ struct EditState { let image: NSImage; let marks: [Mark] }
             guard let self else {return}
             do {
                 let snapshot = try await FrozenCapture.take()
+                CaptureDebug.begin(snapshot,mode:mode)
                 NSApp.unhide(nil); NSApp.activate(ignoringOtherApps:true)
                 if mode == "full" {
-                    self.presentCapture((snapshot.frames.first {$0.frame.contains(mouse)} ?? snapshot.frames.first)?.image, mode:mode, wasVisible:wasVisible)
+                    let frame = snapshot.frames.first {$0.frame.contains(mouse)} ?? snapshot.frames.first
+                    CaptureDebug.finish(selection:frame?.frame,output:frame?.image)
+                    self.presentCapture(frame?.image, mode:mode, wasVisible:wasVisible)
                     return
                 }
                 let session = FrozenCaptureSession(snapshot:snapshot, mode:mode) { [weak self] image in
@@ -101,6 +104,7 @@ struct EditState { let image: NSImage; let marks: [Mark] }
                 self.status = mode == "window" ? L("点击选择窗口 · Esc 取消") : L("拖动选择区域 · Esc 取消")
                 session.start()
             } catch {
+                CaptureDebug.fail(error)
                 NSApp.unhide(nil)
                 self.presentCapture(nil, mode:mode, wasVisible:wasVisible, failed:true)
             }

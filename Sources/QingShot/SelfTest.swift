@@ -18,9 +18,23 @@ enum SelfTest {
         check(cc.redComponent < 0.15,"Crop content matches selection")
         let backdrop = Renderer.render(demo,marks:[],backdrop:.mint,padding:64)
         check(backdrop.pixelSize == CGSize(width:1328,height:888),"Backdrop padding")
+        func markerImage(_ size:CGSize,_ marker:CGRect) -> CGImage {
+            let image = Renderer.bitmap(size:size) {
+                NSColor(hex:0x203040).setFill(); NSBezierPath(rect:CGRect(origin:.zero,size:size)).fill()
+                NSColor.red.setFill(); NSBezierPath(rect:marker).fill()
+            }
+            return image.cgImage(forProposedRect:nil,context:nil,hints:nil)!
+        }
+        func frozen(_ id:CGDirectDisplayID,_ frame:NSRect,_ cg:CGImage) -> FrozenFrame {
+            FrozenFrame(displayID:id,frame:frame,image:NSImage(pixelImage:cg),cgImage:cg)
+        }
+        func isRed(_ image:NSImage?,_ x:Int,_ y:Int) -> Bool {
+            guard let image,let rep = NSBitmapImageRep(data:image.png!),let c = rep.colorAt(x:x,y:y)?.usingColorSpace(.deviceRGB) else {return false}
+            return c.redComponent > 0.7 && c.greenComponent < 0.3 && c.blueComponent < 0.3
+        }
         let demoCG = demo.cgImage(forProposedRect:nil,context:nil,hints:nil)!
-        let frozenLeft = FrozenFrame(frame:NSRect(x:0,y:0,width:600,height:380),image:demo,cgImage:demoCG)
-        let frozenRight = FrozenFrame(frame:NSRect(x:600,y:0,width:600,height:380),image:demo,cgImage:demoCG)
+        let frozenLeft = FrozenFrame(displayID:1,frame:NSRect(x:0,y:0,width:600,height:380),image:demo,cgImage:demoCG)
+        let frozenRight = FrozenFrame(displayID:2,frame:NSRect(x:600,y:0,width:600,height:380),image:demo,cgImage:demoCG)
         let frozenCrop = FrozenCapture.crop([frozenLeft],rect:NSRect(x:50,y:50,width:100,height:60))
         check(frozenCrop?.pixelSize == CGSize(width:200,height:120),"Frozen crop keeps native Retina pixels")
         let frozenAcross = FrozenCapture.crop([frozenLeft,frozenRight],rect:NSRect(x:550,y:100,width:100,height:100))
@@ -29,10 +43,31 @@ enum SelfTest {
             NSColor.red.setFill(); NSBezierPath(rect:CGRect(x:0,y:0,width:100,height:50)).fill()
             NSColor.blue.setFill(); NSBezierPath(rect:CGRect(x:0,y:50,width:100,height:50)).fill()
         }
-        let markerFrame = FrozenFrame(frame:NSRect(x:0,y:0,width:50,height:50),image:marker,cgImage:marker.cgImage(forProposedRect:nil,context:nil,hints:nil)!)
+        let markerFrame = FrozenFrame(displayID:1,frame:NSRect(x:0,y:0,width:50,height:50),image:marker,cgImage:marker.cgImage(forProposedRect:nil,context:nil,hints:nil)!)
         let bottomHalf = FrozenCapture.crop([markerFrame],rect:NSRect(x:0,y:0,width:50,height:25))!
         let bottomColor = NSBitmapImageRep(data:bottomHalf.png!)!.colorAt(x:10,y:10)!.usingColorSpace(.deviceRGB)!
         check(bottomColor.blueComponent > 0.5 && bottomColor.redComponent < 0.5,"Frozen crop maps NSScreen coordinates to image pixels")
+        // Main 2x display: middle selection must crop the middle content at 3024x1964.
+        let mainCG = markerImage(CGSize(width:3024,height:1964),CGRect(x:1500,y:1000,width:100,height:100))
+        let mainImage = NSImage(pixelImage:mainCG)
+        check(mainImage.pixelSize == CGSize(width:3024,height:1964),"Frozen NSImage keeps CG pixel size on Retina")
+        let mainFrame = frozen(1,NSRect(x:0,y:0,width:1512,height:982),mainCG)
+        let mainCrop = FrozenCapture.crop([mainFrame],rect:NSRect(x:750,y:432,width:100,height:100))
+        check(mainCrop?.pixelSize == CGSize(width:200,height:200),"Main display crop is native 2x pixels")
+        check(isRed(mainCrop,50,150),"Main display middle selection crops middle content")
+        // Regression: NSImage(cgImage:size:) reports 2x pixelsWide on Retina; scale must use CGImage.
+        let oneXCG = markerImage(CGSize(width:1512,height:982),CGRect(x:756,y:491,width:50,height:50))
+        let oneXFrame = FrozenFrame(displayID:1,frame:NSRect(x:0,y:0,width:1512,height:982),image:NSImage(cgImage:oneXCG,size:NSSize(width:1512,height:982)),cgImage:oneXCG)
+        check(oneXFrame.scale == 1,"Frozen scale follows CGImage pixels, not NSImage snapshot size")
+        check(isRed(FrozenCapture.crop([oneXFrame],rect:NSRect(x:750,y:430,width:100,height:100)),20,50),"1x frozen frame keeps the selected region")
+        // User layout: external 2x display left of and below main, top edge above main's top.
+        let externalCG = markerImage(CGSize(width:6016,height:3384),CGRect(x:2000,y:1000,width:100,height:100))
+        let externalFrame = frozen(3,NSRect(x:-3008,y:-669,width:3008,height:1692),externalCG)
+        let externalCrop = FrozenCapture.crop([externalFrame],rect:NSRect(x:-2033,y:448,width:100,height:100))
+        check(externalCrop?.pixelSize == CGSize(width:200,height:200),"External 2x display crop is native pixels")
+        check(isRed(externalCrop,100,100),"External display below-left maps the selection correctly")
+        let aboveFrame = frozen(2,NSRect(x:0,y:982,width:1512,height:982),mainCG)
+        check(isRed(FrozenCapture.crop([aboveFrame],rect:NSRect(x:725,y:1389,width:100,height:100)),100,100),"Display above main maps the selection correctly")
         let joined = Renderer.stitch([demo,demo],overlap:60)!
         check(joined.pixelSize == CGSize(width:1200,height:1460),"Vertical stitch and overlap")
         let request = VNRecognizeTextRequest();request.recognitionLevel = .accurate;request.recognitionLanguages = ["en-US","zh-Hans"]

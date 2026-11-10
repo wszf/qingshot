@@ -5,13 +5,27 @@ extension NSScreen {
     var displayID: CGDirectDisplayID? { (deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value }
 }
 
+extension NSImage {
+    // NSImage(cgImage:size:) creates an NSCGImageSnapshotRep whose pixelsWide follows the
+    // current display scale on Retina (e.g. a 1512 px image reports 3024 px). Wrap the
+    // CGImage in a bitmap rep so pixelSize always describes the real pixels.
+    convenience init(pixelImage cgImage: CGImage) {
+        let rep = NSBitmapImageRep(cgImage: cgImage)
+        rep.size = NSSize(width: cgImage.width, height: cgImage.height)
+        self.init(size: rep.size)
+        addRepresentation(rep)
+    }
+}
+
 // A display frozen at the moment the capture was triggered. `frame` uses NSScreen's
 // bottom-left global coordinate space; image pixels are top-left based.
 struct FrozenFrame {
+    let displayID: CGDirectDisplayID
     let frame: NSRect
     let image: NSImage
     let cgImage: CGImage
-    var scale: CGFloat { frame.width > 0 ? image.pixelSize.width / frame.width : 1 }
+    // The CGImage is the source of truth: never derive this from NSImage.pixelSize.
+    var scale: CGFloat { frame.width > 0 ? CGFloat(cgImage.width) / frame.width : 1 }
 }
 
 struct FrozenWindow {
@@ -43,9 +57,13 @@ enum FrozenCapture {
             for display in content.displays {
                 group.addTask {
                     let filter = SCContentFilter(display: display, excludingApplications: excluded, exceptingWindows: [])
+                    // SCDisplay.width/height are points; SCStreamConfiguration width/height
+                    // are pixels. Scale by the filter's point-to-pixel factor for native output.
+                    let pixelScale = CGFloat(filter.pointPixelScale)
                     let config = SCStreamConfiguration()
-                    config.width = display.width
-                    config.height = display.height
+                    config.width = max(1, Int((CGFloat(display.width) * pixelScale).rounded()))
+                    config.height = max(1, Int((CGFloat(display.height) * pixelScale).rounded()))
+                    config.captureResolution = .best
                     config.showsCursor = false
                     return (display.displayID, try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config))
                 }
@@ -56,8 +74,7 @@ enum FrozenCapture {
         }
         let frames = shots.compactMap { id, cg -> FrozenFrame? in
             guard let screen = screens[id] else { return nil }
-            let image = NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
-            return FrozenFrame(frame: screen.frame, image: image, cgImage: cg)
+            return FrozenFrame(displayID: id, frame: screen.frame, image: NSImage(pixelImage: cg), cgImage: cg)
         }
         guard !frames.isEmpty else { throw CocoaError(.featureUnsupported) }
         return Snapshot(frames: frames, windows: windows)
@@ -104,10 +121,65 @@ enum FrozenCapture {
         return Renderer.bitmap(size: CGSize(width: rect.width * scale, height: rect.height * scale)) {
             for (source, crop, dest) in parts {
                 guard let piece = source.cgImage.cropping(to: crop) else { continue }
-                let image = NSImage(cgImage: piece, size: NSSize(width: piece.width, height: piece.height))
+                let image = NSImage(pixelImage: piece)
                 Renderer.drawImage(image, in: CGRect(x: dest.minX * scale, y: dest.minY * scale, width: dest.width * scale, height: dest.height * scale))
             }
         }
+    }
+}
+
+// Optional diagnostics: `defaults write local.qingshot.capture debugCapture -bool true`
+// writes frozen displays, frames/scales, the selection and the crop to ~/Library/Caches/QingShot/debug.
+@MainActor enum CaptureDebug {
+    static var enabled: Bool { UserDefaults.standard.bool(forKey:"debugCapture") }
+    private static var folder: URL?
+
+    private static var baseURL: URL {
+        FileManager.default.urls(for:.cachesDirectory,in:.userDomainMask)[0].appendingPathComponent("QingShot/debug",isDirectory:true)
+    }
+
+    static func begin(_ snapshot:FrozenCapture.Snapshot, mode:String) {
+        guard enabled else { return }
+        let stamp = ISO8601DateFormatter().string(from:Date()).replacingOccurrences(of:":",with:"-")
+        let dir = baseURL.appendingPathComponent("\(stamp)-\(mode)",isDirectory:true)
+        guard (try? FileManager.default.createDirectory(at:dir,withIntermediateDirectories:true)) != nil else { return }
+        folder = dir
+        var lines = ["QingShot capture debug","date: \(Date())","mode: \(mode)","","screens:"]
+        for screen in NSScreen.screens {
+            lines.append("  id=\(screen.displayID ?? 0) frame=\(screen.frame) visible=\(screen.visibleFrame) scale=\(screen.backingScaleFactor)")
+        }
+        lines += ["","frozen frames:"]
+        for frame in snapshot.frames {
+            lines.append("  id=\(frame.displayID) frame=\(frame.frame) cg=\(frame.cgImage.width)x\(frame.cgImage.height) image=\(frame.image.pixelSize) scale=\(frame.scale)")
+            if let data = frame.image.png { try? data.write(to:dir.appendingPathComponent("display-\(frame.displayID).png")) }
+        }
+        lines += ["","windows:"]
+        for window in snapshot.windows {
+            lines.append("  id=\(window.id) frame=\(window.frame) owner=\(window.owner) title=\(window.title)")
+        }
+        try? lines.joined(separator:"\n").write(to:dir.appendingPathComponent("snapshot.txt"),atomically:true,encoding:.utf8)
+    }
+
+    static func finish(selection:NSRect?, output:NSImage?) {
+        guard let dir = folder else { return }
+        folder = nil
+        var lines = ["selection: \(selection.map { "\($0)" } ?? "none")"]
+        if let selection {
+            for screen in NSScreen.screens {
+                let overlap = selection.intersection(screen.frame)
+                let local = NSRect(x:selection.minX-screen.frame.minX,y:screen.frame.maxY-selection.maxY,width:selection.width,height:selection.height)
+                lines.append("  screen id=\(screen.displayID ?? 0) frame=\(screen.frame) scale=\(screen.backingScaleFactor) overlap=\(overlap) local=\(local)")
+            }
+        }
+        lines.append("output: \(output.map { "\($0.pixelSize)" } ?? "none")")
+        try? lines.joined(separator:"\n").write(to:dir.appendingPathComponent("selection.txt"),atomically:true,encoding:.utf8)
+        if let output,let data = output.png { try? data.write(to:dir.appendingPathComponent("output.png")) }
+    }
+
+    static func fail(_ error:Error) {
+        guard enabled else { return }
+        try? FileManager.default.createDirectory(at:baseURL,withIntermediateDirectories:true)
+        try? "error: \(error)".write(to:baseURL.appendingPathComponent("last-error.txt"),atomically:true,encoding:.utf8)
     }
 }
 
@@ -154,6 +226,7 @@ enum FrozenCapture {
         guard !finished else { return }
         finished = true
         let result = rect.flatMap { FrozenCapture.crop(snapshot.frames, rect: $0) }
+        CaptureDebug.finish(selection:rect,output:result)
         windows.forEach { $0.orderOut(nil) }
         windows.removeAll()
         completion(result)
