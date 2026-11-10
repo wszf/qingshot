@@ -26,11 +26,11 @@ cd qingshot
 ./scripts/check.sh
 ```
 
-生成应用包需要你自己的稳定代码签名证书，先退出运行中的 QingShot：
+生成应用包前先退出运行中的 QingShot。默认本机签名身份为项目专用的 `QingShot Self-Signed` 证书，也可指定自己的 Developer ID 证书：
 
 ```sh
 security find-identity -v -p codesigning
-QINGSHOT_SIGNING_IDENTITY="你的 Apple Development 或 Developer ID 证书名称或指纹" ./scripts/build.sh
+QINGSHOT_SIGNING_IDENTITY="QingShot Self-Signed" ./scripts/build.sh
 open ../QingShot.app
 ```
 
@@ -42,22 +42,24 @@ open ../QingShot.app
 
 每次分支推送或 Pull Request 都会自动编译、运行三组自检、打包并验证签名，也可以在 Actions 页面手动运行。构建产物 `QingShot-macOS-arm64` 包含 ZIP 和 SHA-256 校验和，保留 14 天。
 
-推送 `v主版本.次版本.修订号` 标签（例如 `v0.2.0`）会自动创建 GitHub 预发布并上传安装包。应用版本来自标签，构建号来自 Actions 运行编号。**仅发布 Apple Silicon（arm64）版本，要求 macOS 15+，不构建 Intel 版本。** 使用内置 GitHub token，无需配置额外 Secrets。
+推送 `v主版本.次版本.修订号` 标签（例如 `v0.3.1`）会创建正式 GitHub 发布，上传 ZIP、校验和与 Sparkle `appcast.xml`。应用版本来自标签，构建号来自 Actions 运行编号。**仅发布 Apple Silicon（arm64）版本，要求 macOS 15+，不构建 Intel 版本。**
 
-发布包采用临时 ad-hoc 签名，**未经过 Apple 公证**。首次打开可能被系统拦截，可在「系统设置 → 隐私与安全性」查看。更新后可能需要重新授予录屏权限。仍建议使用稳定证书从源码构建；本地 `build.sh` 的签名要求保持不变。
+Tag 构建使用项目专用的 `QingShot Self-Signed` 证书签名；分支和 PR 构建在没有 Secret 时回退到 ad-hoc。发布包**未经过 Apple 公证**，首次打开可能被系统拦截，可在「系统设置 → 隐私与安全性」查看。切换签名身份后可能需要重新授予录屏权限。
+
+发布自动化需要仓库 Secrets：`SPARKLE_ED_PRIVATE_KEY`、`QINGSHOT_SIGNING_P12_BASE64`、`QINGSHOT_SIGNING_P12_PASSWORD`。
 
 在 Apple Silicon 本地复现：
 
 ```sh
-./scripts/release.sh 0.2.0 2
+./scripts/release.sh 0.3.1 100
 # 输出：.build/dist/ 中的 ZIP 与校验和
 ```
 
 提交并推送代码后发布：
 
 ```sh
-git tag -a v0.2.0 -m "QingShot 0.2.0"
-git push origin v0.2.0
+git tag -a v0.3.1 -m "Sparkle 自动更新、CI 统一签名"
+git push origin v0.3.1
 ```
 
 每次发布使用新版本标签；重跑工作流不会覆盖已发布版本。

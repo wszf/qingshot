@@ -17,8 +17,18 @@ trap 'rm -rf "$STAGING"' EXIT
 APP="$STAGING/QingShot.app"
 ./scripts/package-app.sh "$APP" "$VERSION" "$BUILD_NUMBER"
 [[ "$(lipo -archs "$APP/Contents/MacOS/QingShot")" == arm64 ]]
-# Explicit preview distribution only; local development still requires a stable certificate.
-./scripts/sign-app.sh - "$APP"
+SIGNING_IDENTITY="${QINGSHOT_SIGNING_IDENTITY:-}"
+if [[ -z "$SIGNING_IDENTITY" && "${GITHUB_ACTIONS:-}" != "true" ]]; then
+    SIGNING_IDENTITY="QingShot Self-Signed"
+fi
+if [[ -n "$SIGNING_IDENTITY" ]]; then
+    ./scripts/sign-app.sh "$SIGNING_IDENTITY" "$APP"
+    AUTHORITY="$(codesign -dvv "$APP" 2>&1 | sed -n 's/^Authority=//p' | head -1)"
+    echo "Signed with Authority: $AUTHORITY"
+else
+    ./scripts/sign-app.sh - "$APP"
+    echo "Signed ad-hoc (no signing identity provided)"
+fi
 "$APP/Contents/MacOS/QingShot" --shortcut-self-test
 "$APP/Contents/MacOS/QingShot" --localization-self-test
 QINGSHOT_TEST_OUTPUT="$STAGING" "$APP/Contents/MacOS/QingShot" --self-test

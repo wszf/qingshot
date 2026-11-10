@@ -102,7 +102,7 @@ import Sparkle
     @objc func settings() {settingsController.show()}
     @objc func checkForUpdates() {UpdateManager.shared.checkForUpdates()}
 
-    @objc func about() {let version = Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "0.3.0";model.alert(L("轻截图 QingShot") + " \(version)",L("原生 macOS 截图工具\n截图 · 标注 · 文字识别 · 美化 · 拼接 · 录屏\n截图与识别均在本机处理。\nApple Development 签名开发预览版，未进行 Developer ID 公证。"))}
+    @objc func about() {let version = Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "0.3.0";model.alert(L("轻截图 QingShot") + " \(version)",L("原生 macOS 截图工具\n截图 · 标注 · 文字识别 · 美化 · 拼接 · 录屏\n截图与识别均在本机处理。\nQingShot Self-Signed 签名开发预览版，未进行 Apple 公证。"))}
     @objc func quit() {NSApp.terminate(nil)}
     @objc func area() {model.capture("area")}
     @objc func windowCapture() {model.capture("window")}

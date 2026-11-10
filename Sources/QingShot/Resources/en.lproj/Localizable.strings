@@ -157,7 +157,7 @@
 "部分快捷键被占用，请到设置中更换。" = "Some shortcuts are in use. Choose different shortcuts in Settings.";
 "正在录屏，点击菜单停止" = "Recording — use the menu to stop";
 "轻截图 QingShot 0.1" = "QingShot 0.1";
-"原生 macOS 截图工具\n截图 · 标注 · 文字识别 · 美化 · 拼接 · 录屏\n截图与识别均在本机处理。\nApple Development 签名开发预览版，未进行 Developer ID 公证。" = "A native macOS capture tool\nCapture · Annotate · OCR · Style · Stitch · Record\nImages and text are processed on your Mac.\nDevelopment preview. Not notarized for distribution.";
+"原生 macOS 截图工具\n截图 · 标注 · 文字识别 · 美化 · 拼接 · 录屏\n截图与识别均在本机处理。\nQingShot Self-Signed 签名开发预览版，未进行 Apple 公证。" = "A native macOS capture tool\nCapture · Annotate · OCR · Style · Stitch · Record\nImages and text are processed on your Mac.\nSelf-signed development build. Not notarized for distribution.";
 "空格" = "Space";
 "请选择字母、数字、符号、空格或 F1–F12。" = "Choose a letter, number, symbol, Space or F1–F12.";
 "请至少搭配 Command ⌘ 或 Control ⌃，避免影响正常输入。" = "Include Command ⌘ or Control ⌃ to avoid interfering with typing.";

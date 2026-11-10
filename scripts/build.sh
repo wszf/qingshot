@@ -6,8 +6,15 @@ IDENTITY="${QINGSHOT_SIGNING_IDENTITY:-}"
 if [[ -z "$IDENTITY" && -f .signing-identity ]]; then
     IDENTITY="$(cat .signing-identity)"
 fi
-if [[ -z "$IDENTITY" || "$IDENTITY" == "-" ]]; then
-    echo "Set QINGSHOT_SIGNING_IDENTITY to a valid Apple Development/Developer ID certificate (security find-identity -v -p codesigning)." >&2
+if [[ -z "$IDENTITY" ]]; then
+    IDENTITY="QingShot Self-Signed"
+fi
+if [[ "$IDENTITY" == "-" ]]; then
+    echo "Ad-hoc signing is not allowed for local builds." >&2
+    exit 1
+fi
+if ! security find-identity -p codesigning | grep -q "QingShot Self-Signed\|$IDENTITY"; then
+    echo "Signing identity '$IDENTITY' was not found in the Keychain." >&2
     exit 1
 fi
 if /usr/bin/pgrep -x QingShot >/dev/null; then

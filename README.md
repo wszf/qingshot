@@ -28,11 +28,11 @@ cd qingshot
 ./scripts/check.sh
 ```
 
-To build the app bundle, quit any running QingShot and select a stable Apple Development or Developer ID certificate from your own Keychain:
+To build the app bundle, quit any running QingShot. The default local identity is the project’s `QingShot Self-Signed` certificate (or specify your own Developer ID certificate):
 
 ```sh
 security find-identity -v -p codesigning
-QINGSHOT_SIGNING_IDENTITY="YOUR_CERTIFICATE_NAME_OR_SHA1" ./scripts/build.sh
+QINGSHOT_SIGNING_IDENTITY="QingShot Self-Signed" ./scripts/build.sh
 open ../QingShot.app
 ```
 
@@ -44,22 +44,24 @@ The local build script creates a bundle for the current host architecture. Build
 
 GitHub Actions builds, runs all three self-tests, packages the app and verifies its signature on every branch push and pull request. You can also run the workflow manually. Download the ZIP and SHA-256 checksum from the `QingShot-macOS-arm64` workflow artifact (retained for 14 days).
 
-Push a tag such as `v0.2.0` to automatically publish a GitHub prerelease with the ZIP and checksum. Tags must use `vMAJOR.MINOR.PATCH`; the tag supplies the app version and the Actions run number supplies its build number. Only Apple Silicon (arm64), macOS 15+, is distributed. No Intel build is produced. Publishing uses the built-in GitHub token; no repository secrets are required.
+Push a tag such as `v0.3.1` to publish a formal GitHub release with the ZIP, checksum and Sparkle `appcast.xml`. Tags must use `vMAJOR.MINOR.PATCH`; the tag supplies the app version and the Actions run number supplies its build number. Only Apple Silicon (arm64), macOS 15+, is distributed. No Intel build is produced.
 
-These preview packages are **ad-hoc signed, not Apple-notarized**. macOS may block the first launch; review it in System Settings → Privacy & Security. Updating may require granting screen-recording permission again. The local `build.sh` signing policy is unchanged.
+Tag builds are signed with the project’s `QingShot Self-Signed` identity; branch and pull-request builds fall back to ad-hoc signing. Releases are **not Apple-notarized**. macOS may block the first launch; review it in System Settings → Privacy & Security. Screen-recording permission may need to be granted again after switching signing identities.
+
+Release automation requires the repository secrets `SPARKLE_ED_PRIVATE_KEY`, `QINGSHOT_SIGNING_P12_BASE64` and `QINGSHOT_SIGNING_P12_PASSWORD`.
 
 To reproduce a preview package on Apple Silicon:
 
 ```sh
-./scripts/release.sh 0.2.0 2
+./scripts/release.sh 0.3.1 100
 # ZIP and checksum: .build/dist/
 ```
 
 To publish after committing and pushing your changes:
 
 ```sh
-git tag -a v0.2.0 -m "QingShot 0.2.0"
-git push origin v0.2.0
+git tag -a v0.3.1 -m "Sparkle auto-updates, unified CI signing"
+git push origin v0.3.1
 ```
 
 Use a new version tag for each release. Already-published releases are not overwritten on workflow reruns.
