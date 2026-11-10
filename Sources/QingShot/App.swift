@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Carbon
 import Combine
+import Sparkle
 
 @main struct QingShotMain {
     static func main() {
@@ -13,6 +14,22 @@ import Combine
         withExtendedLifetime(delegate) {}
     }
 }
+@MainActor final class UpdateManager:ObservableObject {
+    static let shared = UpdateManager()
+    let controller:SPUStandardUpdaterController
+    @Published private(set) var automaticallyChecksForUpdates:Bool
+
+    private init() {
+        controller = SPUStandardUpdaterController(startingUpdater:true, updaterDelegate:nil, userDriverDelegate:nil)
+        automaticallyChecksForUpdates = controller.updater.automaticallyChecksForUpdates
+    }
+    func setAutomaticChecks(_ enabled:Bool) {
+        controller.updater.automaticallyChecksForUpdates = enabled
+        automaticallyChecksForUpdates = enabled
+    }
+    func checkForUpdates() {controller.checkForUpdates(nil)}
+}
+
 @MainActor final class AppDelegate:NSObject,NSApplicationDelegate {
     let model = ShotModel.shared
     var statusItem:NSStatusItem!
@@ -27,6 +44,7 @@ import Combine
         w.title = L("轻截图 QingShot"); w.titlebarAppearsTransparent = true; w.isReleasedWhenClosed = false
         w.contentView = NSHostingView(rootView:ContentView(model:model).preferredColorScheme(.light)); w.minSize = CGSize(width:1040,height:730);w.center();model.window = w
         setupMenu(); setupStatus(); setupHotkeys();model.showWindow()
+        _ = UpdateManager.shared
         languageObserver = LanguageStore.shared.$selection.dropFirst().receive(on:RunLoop.main).sink { [weak self] _ in
             guard let self else {return}
             self.setupMenu();self.setupStatus();self.settingsController.refreshLanguage();self.shortcuts.refreshLanguage()
@@ -45,7 +63,7 @@ import Combine
     func setupMenu() {
         let main = NSMenu()
         let appRoot = NSMenuItem();let app = NSMenu();appRoot.submenu = app;main.addItem(appRoot)
-        app.addItem(item(L("关于轻截图"),#selector(about)));app.addItem(item(L("设置…"),#selector(settings),","));app.addItem(.separator());app.addItem(item(L("退出轻截图"),#selector(quit),"q"))
+        app.addItem(item(L("关于轻截图"),#selector(about)));app.addItem(item(L("检查更新…"),#selector(checkForUpdates)));app.addItem(item(L("设置…"),#selector(settings),","));app.addItem(.separator());app.addItem(item(L("退出轻截图"),#selector(quit),"q"))
         let fileRoot = NSMenuItem(title:L("文件"),action:nil,keyEquivalent:"");let file = NSMenu(title:L("文件"));fileRoot.submenu = file;main.addItem(fileRoot)
         file.addItem(item(L("区域截图"),#selector(area),"n"));file.addItem(item(L("导入图片…"),#selector(openImage),"o"));file.addItem(item(L("导出 PNG…"),#selector(save),"s"));file.addItem(item(L("拼接长图…"),#selector(stitch)));file.addItem(.separator());file.addItem(item(L("关闭窗口"),#selector(closeWindow),"w"))
         let editRoot = NSMenuItem(title:L("编辑"),action:nil,keyEquivalent:"");let edit = NSMenu(title:L("编辑"));editRoot.submenu = edit;main.addItem(editRoot)
@@ -57,7 +75,7 @@ import Combine
     func setupStatus() {
         if statusItem == nil {statusItem = NSStatusBar.system.statusItem(withLength:NSStatusItem.squareLength)}
         statusItem.button?.image = NSImage(systemSymbolName:"viewfinder",accessibilityDescription:L("轻截图"))
-        let menu = NSMenu();menu.addItem(item(L("区域截图     ⌃⇧2"),#selector(area)));menu.addItem(item(L("窗口截图     ⌃⇧3"),#selector(windowCapture)));menu.addItem(item(L("全屏截图     ⌃⇧4"),#selector(full)));menu.addItem(.separator());menu.addItem(item(L("显示编辑器"),#selector(show)));menu.addItem(item(L("设置…"),#selector(settings)));menu.addItem(item(L("开始录屏（主屏，无音频）"),#selector(record)));menu.addItem(item(L("停止录屏"),#selector(stopRecord)));menu.addItem(.separator());menu.addItem(item(L("退出轻截图"),#selector(quit)));statusItem.menu = menu
+        let menu = NSMenu();menu.addItem(item(L("区域截图     ⌃⇧2"),#selector(area)));menu.addItem(item(L("窗口截图     ⌃⇧3"),#selector(windowCapture)));menu.addItem(item(L("全屏截图     ⌃⇧4"),#selector(full)));menu.addItem(.separator());menu.addItem(item(L("显示编辑器"),#selector(show)));menu.addItem(item(L("检查更新…"),#selector(checkForUpdates)));menu.addItem(item(L("设置…"),#selector(settings)));menu.addItem(item(L("开始录屏（主屏，无音频）"),#selector(record)));menu.addItem(item(L("停止录屏"),#selector(stopRecord)));menu.addItem(.separator());menu.addItem(item(L("退出轻截图"),#selector(quit)));statusItem.menu = menu
         shortcutObserver = shortcuts.$bindings.receive(on:RunLoop.main).sink { [weak self] bindings in
             guard let self else {return}
             for (index,action) in CaptureAction.allCases.enumerated() {
@@ -82,8 +100,9 @@ import Combine
         if !shortcuts.errors.isEmpty {model.status = L("部分快捷键被占用，请到设置中更换。")}
     }
     @objc func settings() {settingsController.show()}
+    @objc func checkForUpdates() {UpdateManager.shared.checkForUpdates()}
 
-    @objc func about() {model.alert(L("轻截图 QingShot") + " 0.2.0",L("原生 macOS 截图工具\n截图 · 标注 · 文字识别 · 美化 · 拼接 · 录屏\n截图与识别均在本机处理。\nApple Development 签名开发预览版，未进行 Developer ID 公证。"))}
+    @objc func about() {let version = Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "0.3.0";model.alert(L("轻截图 QingShot") + " \(version)",L("原生 macOS 截图工具\n截图 · 标注 · 文字识别 · 美化 · 拼接 · 录屏\n截图与识别均在本机处理。\nApple Development 签名开发预览版，未进行 Developer ID 公证。"))}
     @objc func quit() {NSApp.terminate(nil)}
     @objc func area() {model.capture("area")}
     @objc func windowCapture() {model.capture("window")}

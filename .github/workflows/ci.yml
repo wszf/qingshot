@@ -23,7 +23,7 @@ jobs:
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
         run: |
-          version=0.2.0
+          version=0.3.0
           if [[ "$REF_TYPE" == tag ]]; then
             if [[ ! "$REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
               echo 'Release tags must use vMAJOR.MINOR.PATCH' >&2
@@ -36,6 +36,12 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.value }}
         run: ./scripts/release.sh "$VERSION" "$GITHUB_RUN_NUMBER"
+      - name: Generate Sparkle appcast
+        if: startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push'
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: ./scripts/appcast.sh "$VERSION"
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: QingShot-macOS-arm64

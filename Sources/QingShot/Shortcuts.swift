@@ -145,7 +145,7 @@ final class CarbonHotkeys: HotkeyRegistering {
     init(shortcuts:ShortcutStore) {self.shortcuts = shortcuts}
     func show() {
         if window == nil {
-            let w = NSWindow(contentRect:NSRect(x:0,y:0,width:640,height:700),styleMask:[.titled,.closable],backing:.buffered,defer:false)
+            let w = NSWindow(contentRect:NSRect(x:0,y:0,width:640,height:760),styleMask:[.titled,.closable],backing:.buffered,defer:false)
             w.title = L("轻截图设置");w.isReleasedWhenClosed = false;w.delegate = self
             w.contentView = NSHostingView(rootView:ShortcutSettingsView(store:shortcuts).preferredColorScheme(.light));w.center();window = w
         }
@@ -158,6 +158,7 @@ final class CarbonHotkeys: HotkeyRegistering {
 struct ShortcutSettingsView:View {
     @ObservedObject var languageStore = LanguageStore.shared
     @ObservedObject var store:ShortcutStore
+    @ObservedObject var updates = UpdateManager.shared
     @State private var postCaptureMode = PostCaptureMode.stored()
     var body:some View {
         VStack(alignment:.leading,spacing:16) {
@@ -178,6 +179,11 @@ struct ShortcutSettingsView:View {
                 }.labelsHidden().pickerStyle(.segmented).frame(maxWidth:420,alignment:.leading)
                 Text(L("仅影响区域截图和窗口截图；全屏截图使用居中小编辑器。")).font(.system(size:11)).foregroundStyle(.secondary)
             }.onChange(of:postCaptureMode) {_,mode in PostCaptureMode.save(mode)}
+            VStack(alignment:.leading,spacing:8) {
+                Toggle(L("自动检查更新"),isOn:Binding(get:{updates.automaticallyChecksForUpdates},set:{updates.setAutomaticChecks($0)}))
+                    .toggleStyle(.switch).fixedSize()
+                Text(L("每天自动检查一次；也可在应用菜单中手动检查。")).font(.system(size:11)).foregroundStyle(.secondary)
+            }
             VStack(spacing:0) {
                 ForEach(CaptureAction.allCases) {action in
                     HStack(spacing:12) {
@@ -196,6 +202,6 @@ struct ShortcutSettingsView:View {
             Text(L("使用 ⌘ Command 或 ⌃ Control 搭配其他按键。快捷键全局生效；关闭编辑器后仍可使用。按键名称按美式键盘物理位置显示。")).font(.system(size:11)).foregroundStyle(.secondary).lineSpacing(4)
             Divider()
             HStack {Button(L("恢复默认")) {store.restoreDefaults()};Spacer();if store.recording != nil {Button(L("取消录入")) {store.cancelRecording()}};Text(L("自动保存 · 即时生效")).font(.system(size:11)).foregroundStyle(.secondary)}
-        }.padding(28).frame(width:640,height:700).background(Color(nsColor:NSColor(hex:0xF6F8F5))).tint(accent)
+        }.padding(28).frame(width:640,height:760).background(Color(nsColor:NSColor(hex:0xF6F8F5))).tint(accent)
     }
 }

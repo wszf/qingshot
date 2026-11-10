@@ -175,6 +175,9 @@
 "请按下「{0}」的组合键；Esc 取消。" = "Press a combination for {0}; Esc to cancel.";
 "已取消，原快捷键保持不变。" = "Cancelled. Your previous shortcut is unchanged.";
 "轻截图设置" = "QingShot Settings";
+"检查更新…" = "Check for Updates…";
+"自动检查更新" = "Automatically check for updates";
+"每天自动检查一次；也可在应用菜单中手动检查。" = "Checks once a day; you can also check manually from the app menu.";
 "截图快捷键" = "Capture Shortcuts";
 "随手一按，捕捉眼前的灵感。" = "Capture the moment with a keystroke.";
 "请按组合键…" = "Press keys…";

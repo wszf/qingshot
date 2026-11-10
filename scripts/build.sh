@@ -17,8 +17,7 @@ fi
 swift build -c release
 APP=".build/packaging/QingShot.app"
 ./scripts/package-app.sh "$APP"
-codesign --force --sign "$IDENTITY" "$APP"
-codesign --verify --deep --strict "$APP"
+./scripts/sign-app.sh "$IDENTITY" "$APP"
 # Finish and verify the staged bundle before replacing the installed local build.
 if [[ -d ../QingShot.app ]]; then
     BACKUP=".build/previous-QingShot-$(date +%s)-$$.app"

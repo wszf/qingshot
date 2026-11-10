@@ -1,3 +1,22 @@
 // swift-tools-version: 5.9
 import PackageDescription
-let package = Package(name: "QingShot", defaultLocalization: "en", platforms: [.macOS("15.0")], products: [.executable(name: "QingShot", targets: ["QingShot"])], targets: [.executableTarget(name: "QingShot", resources: [.process("Resources")])])
+let package = Package(
+    name: "QingShot",
+    defaultLocalization: "en",
+    platforms: [.macOS("15.0")],
+    products: [.executable(name: "QingShot", targets: ["QingShot"])],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.10.1")
+    ],
+    targets: [
+        .executableTarget(
+            name: "QingShot",
+            dependencies: [.product(name: "Sparkle", package: "Sparkle")],
+            resources: [.process("Resources")],
+            linkerSettings: [.unsafeFlags([
+                "-Xlinker", "-rpath", "-Xlinker", "@executable_path",
+                "-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"
+            ])]
+        )
+    ]
+)

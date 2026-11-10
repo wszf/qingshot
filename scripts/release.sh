@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-VERSION="${1:-0.2.0}"
-BUILD_NUMBER="${2:-2}"
+VERSION="${1:-0.3.0}"
+BUILD_NUMBER="${2:-3}"
 if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ || ! "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
     echo "Usage: release.sh MAJOR.MINOR.PATCH POSITIVE_BUILD_NUMBER" >&2
     exit 1
@@ -18,8 +18,7 @@ APP="$STAGING/QingShot.app"
 ./scripts/package-app.sh "$APP" "$VERSION" "$BUILD_NUMBER"
 [[ "$(lipo -archs "$APP/Contents/MacOS/QingShot")" == arm64 ]]
 # Explicit preview distribution only; local development still requires a stable certificate.
-codesign --force --sign - "$APP"
-codesign --verify --deep --strict "$APP"
+./scripts/sign-app.sh - "$APP"
 "$APP/Contents/MacOS/QingShot" --shortcut-self-test
 "$APP/Contents/MacOS/QingShot" --localization-self-test
 QINGSHOT_TEST_OUTPUT="$STAGING" "$APP/Contents/MacOS/QingShot" --self-test
