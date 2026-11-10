@@ -78,7 +78,7 @@ enum InlineToolbarLayout {
         let x = min(max(selection.midX-width/2,screen.minX+margin),max(screen.minX+margin,screen.maxX-margin-width))
         let below = selection.minY-gap-height
         if below >= screen.minY+margin {return NSRect(x:x,y:below,width:width,height:height)}
-        let above = selection.maxY+gap
+        let above = selection.maxY+gap+26
         if above+height <= screen.maxY-margin {return NSRect(x:x,y:above,width:width,height:height)}
         let y = min(max(selection.minY+margin,screen.minY+margin),max(screen.minY+margin,screen.maxY-margin-height))
         return NSRect(x:x,y:y,width:width,height:height)
@@ -253,7 +253,7 @@ struct InlineToolbarView:View {
             }
             Divider().frame(height:22).padding(.horizontal,5)
             ColorPicker(L("颜色"),selection:$model.color,supportsOpacity:false).labelsHidden().frame(width:26)
-            Picker(L("线宽"),selection:$model.lineWidth) {Text(L("细")).tag(3.0);Text(L("中")).tag(5.0);Text(L("粗")).tag(9.0)}.labelsHidden().pickerStyle(.menu).frame(width:54)
+            Picker(L("线宽"),selection:$model.lineWidth) {Text(L("细")).tag(3.0);Text(L("中")).tag(5.0);Text(L("粗")).tag(9.0)}.labelsHidden().pickerStyle(.segmented).frame(width:112)
             Divider().frame(height:22).padding(.horizontal,5)
             Button {model.undo()} label: {Image(systemName:"arrow.uturn.backward")}.buttonStyle(.plain).disabled(model.undoStack.isEmpty).help(L("撤销 ⌘Z"))
             Button {model.redo()} label: {Image(systemName:"arrow.uturn.forward")}.buttonStyle(.plain).disabled(model.redoStack.isEmpty).help(L("重做 ⇧⌘Z"))

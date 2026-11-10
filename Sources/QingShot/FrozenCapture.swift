@@ -285,6 +285,7 @@ enum FrozenCapture {
     private func finishInline(kept: Bool) {
         guard !finished else { return }
         finished = true
+        NSColorPanel.shared.level = .floating
         removeMonitor()
         toolbar?.orderOut(nil); toolbar = nil
         CaptureDebug.finish(selection: inlineSelection, output: kept ? model?.output() : nil)
@@ -318,6 +319,8 @@ enum FrozenCapture {
         panel.appearance = NSAppearance(named: .aqua)
         panel.contentView = host
         toolbar = panel
+        NSColorPanel.shared.level = NSWindow.Level(rawValue: Self.overlayLevel.rawValue + 3)
+        NSColorPanel.shared.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         positionToolbar(selection: selection)
         panel.orderFrontRegardless()
     }
@@ -489,7 +492,7 @@ final class FrozenOverlayView: NSView {
         NSColor.systemBlue.setStroke()
         let border = NSBezierPath(rect: local); border.lineWidth = 2; border.stroke()
         if (inlineModel?.marks.isEmpty ?? true), mode == "area" {drawHandles(local)}
-        drawLabel("\(Int((selection.width * frozen.scale).rounded())) × \(Int((selection.height * frozen.scale).rounded()))", near: local)
+        drawLabel("\(Int((selection.width * frozen.scale).rounded())) × \(Int((selection.height * frozen.scale).rounded()))", near: local, above: true)
     }
 
     private func dim(around rect: NSRect) {
@@ -534,12 +537,13 @@ final class FrozenOverlayView: NSView {
         drawLabel(title, near: rect)
     }
 
-    private func drawLabel(_ text: String, near rect: NSRect) {
+    private func drawLabel(_ text: String, near rect: NSRect, above: Bool = false) {
         guard !text.isEmpty else { return }
         let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium), .foregroundColor: NSColor.white]
         let size = (text as NSString).size(withAttributes: attrs)
-        var origin = NSPoint(x: rect.minX + 8, y: rect.maxY + 8)
-        if origin.y + size.height > bounds.height { origin.y = rect.maxY - size.height - 8 }
+        var origin = above ? NSPoint(x: rect.minX + 8, y: rect.minY - size.height - 12) : NSPoint(x: rect.minX + 8, y: rect.maxY + 8)
+        if above && origin.y < 4 {origin.y = rect.minY + 8}
+        if !above && origin.y + size.height > bounds.height { origin.y = rect.maxY - size.height - 8 }
         if origin.y < 4 { origin.y = 4 }
         origin.x = min(max(4, origin.x), max(4, bounds.width - size.width - 12))
         let background = NSRect(x: origin.x - 6, y: origin.y - 4, width: min(size.width + 12, bounds.width - 8), height: size.height + 8)
